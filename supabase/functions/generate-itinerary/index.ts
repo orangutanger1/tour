@@ -4,17 +4,16 @@ import { handleGenerate, type GenerateRequest, type HandlerDeps } from "./handle
 import { fetchPois } from "../../_shared/places.ts";
 import { curateItinerary } from "../../_shared/curate.ts";
 import { orderStops } from "../../_shared/routes.ts";
-import type { LlmComplete } from "../../_shared/types.ts";
+import { makeLlmComplete } from "../../_shared/llm_adapter.ts";
 
 const PLACES_KEY = Deno.env.get("GOOGLE_PLACES_KEY")!;
 const ROUTES_KEY = Deno.env.get("GOOGLE_ROUTES_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-// Provider-neutral seam. Replace this body with the bench-test winner's adapter.
-const llmComplete: LlmComplete = (prompt) => {
-  throw new Error("LLM adapter not yet wired: " + prompt.slice(0, 0));
-};
+const LLM_KEY = Deno.env.get("LLM_API_KEY")!;
+const LLM_ENDPOINT = Deno.env.get("LLM_ENDPOINT")!;
+const LLM_MODEL = Deno.env.get("LLM_MODEL")!;
+const llmComplete = makeLlmComplete({ httpFetch: fetch, apiKey: LLM_KEY, endpoint: LLM_ENDPOINT, model: LLM_MODEL });
 
 function startOfTodayISO(): string {
   const d = new Date();
