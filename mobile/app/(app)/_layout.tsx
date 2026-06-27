@@ -1,6 +1,11 @@
 // mobile/app/(app)/_layout.tsx
 import { Stack } from "expo-router";
+import { TripFlowProvider } from "../../lib/tripFlow";
 
 export default function AppLayout() {
-  return <Stack screenOptions={{ headerShown: true }} />;
+  return (
+    <TripFlowProvider>
+      <Stack screenOptions={{ headerShown: true }} />
+    </TripFlowProvider>
+  );
 }
