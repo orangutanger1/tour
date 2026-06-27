@@ -60,8 +60,17 @@ mobile/
     profile.test.ts    # unit: table/columns, error mapping
     onboarding.ts      # PURE: step validators, buildRequest(state), stateFromProfile(prefs)
     onboarding.test.ts # unit: validators + buildRequest + stateFromProfile
+    poi.ts             # getStopCoords: read cached_pois by place_id for map pins
+    poi.test.ts        # unit: in-query shape, payload -> coord mapping
     tripFlow.tsx       # TripFlowProvider + useTripFlow: { generate, status, error, data, reset }
 ```
+
+**Map coordinate source:** the generate response `Stop` carries `{placeId, name, blurb,
+travelMinutesFromPrev}` — no lat/lng. The map reads coordinates client-side from the
+`cached_pois` table (RLS allows authenticated `select`), which the edge function populates
+during generate with the full `Poi` payload (incl. lat/lng) for every fetched place. So the
+map needs no backend contract change. This is a coords-only lookup, distinct from the
+deferred POI-detail screen.
 
 **Component contracts (each understandable + testable in isolation):**
 
@@ -86,9 +95,12 @@ mobile/
 - **`generating.tsx`** — reads `useTripFlow().status`. `pending` → spinner + step text;
   `success` → `router.replace('/itinerary')`; `error` → message + **Try again**
   (`tripFlow.generate` with the same request) + **Edit** (back to onboarding).
+- **`lib/poi.ts`** — `getStopCoords(supabase, placeIds): Promise<Record<placeId, {lat, lng,
+  name}>>`. One `in('place_id', placeIds)` read of `cached_pois`, mapping `payload` → coord.
+  Injectable client for tests. Used only by the map view.
 - **`itinerary.tsx`** — reads `useTripFlow().data`. Renders day-by-day list (lodging anchor
   + ordered stops with name, blurb, travel-minutes) and a map toggle (`expo-maps`) showing
-  stop pins + lodging anchor. Empty state if no days/stops.
+  stop pins + lodging anchor (coords via `getStopCoords`). Empty state if no days/stops.
 
 **Data flow (the 2b path):**
 ```
@@ -129,6 +141,7 @@ The generate call hits the existing edge function (saves the trip server-side, r
 | Generate non-2xx (`ApiError`) | Generating screen shows the message + **Try again** (re-run) + **Edit** (back to onboarding) |
 | Network failure mid-generate | Same error UI as above |
 | Itinerary returned with 0 days/stops (thin/rural data) | Itinerary empty state: "limited data here, try a broader location" + **Edit** |
+| A stop's place_id missing from `cached_pois` (coord lookup) | Skip that pin; list view still shows the stop. Map renders the pins it has |
 | No profile yet (first run) | `getProfile` returns null → onboarding seeds with empty defaults |
 | Profile upsert fails | Surface a non-blocking warning but still attempt generate (profile save is best-effort; the trip request carries the prefs regardless) |
 | User backs out of onboarding | Returns to home; `TripFlow.reset()` clears stale state |
@@ -146,6 +159,7 @@ The generate call hits the existing edge function (saves the trip server-side, r
 
 ## 8. Deferred (YAGNI)
 
-POI detail screen · diet/accessibility collection · saved-trips list · edit
-(reorder/add/remove/swap/regenerate) · lodging picker · offline cache · map on Android
+POI **detail screen** (tap-through with hours/deep-link — note: coords lookup for map pins
+is in scope, the detail screen is not) · diet/accessibility collection · saved-trips list ·
+edit (reorder/add/remove/swap/regenerate) · lodging picker · offline cache · map on Android
 (iOS-only app) · React Native Testing Library · monorepo shared-types package.
