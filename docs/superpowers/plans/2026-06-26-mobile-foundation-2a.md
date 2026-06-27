@@ -26,13 +26,12 @@
 These produce the IDs/keys the code reads from env. Gather them once.
 
 1. **Supabase URL + anon key** — Dashboard (project `zhqucbpgcysxhejvbhex`) → Settings → API. Copy `Project URL` and `anon public` key.
-2. **Google OAuth client IDs** — Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID, three times:
+2. **Google OAuth client IDs** — Google Cloud Console → APIs & Services → Credentials → Create OAuth client ID, twice (iOS-only app):
    - **Web** (used by Supabase + as `webClientId` for idToken),
-   - **iOS** (bundle id e.g. `com.tour.app`),
-   - **Android** (package + SHA-1 from `eas credentials`).
+   - **iOS** (bundle id `com.tour.local`).
 3. **Supabase Auth → Google provider** — Dashboard → Authentication → Providers → Google → enable, paste the **Web** client ID + secret.
 4. **Apple Developer** ($99/yr) → Certificates, Identifiers & Profiles:
-   - App ID with **Sign In with Apple** capability (bundle `com.tour.app`),
+   - App ID with **Sign In with Apple** capability (bundle `com.tour.local`),
    - a **Services ID**, and a **Sign in with Apple key**.
 5. **Supabase Auth → Apple provider** — enable, paste Services ID + key + team/key IDs.
 6. **EAS** — `npm i -g eas-cli`, `eas login`, then `eas build:configure` (Task 8 covers the build itself).
@@ -80,8 +79,7 @@ const config: ExpoConfig = {
   name: "Tour",
   slug: "tour",
   scheme: "tour",
-  ios: { bundleIdentifier: "com.tour.app", usesAppleSignIn: true, supportsTablet: true },
-  android: { package: "com.tour.app" },
+  ios: { bundleIdentifier: "com.tour.local", usesAppleSignIn: true, supportsTablet: true },
   plugins: [
     "expo-router",
     "expo-secure-store",
@@ -716,9 +714,8 @@ git commit -m "feat(mobile): useGenerateItinerary mutation hook"
 ```bash
 cd mobile
 eas build:configure
-eas build --profile development --platform ios   # use a real device or simulator + a Mac
+eas build --profile development --platform ios   # iOS-only; needs a Mac or EAS cloud build
 ```
-(Android: `--platform android`. Apple sign-in requires iOS.)
 
 - [ ] **Step 2: Run the dev server against the build**
 
