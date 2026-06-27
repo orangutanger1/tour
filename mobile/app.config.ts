@@ -13,7 +13,25 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     usesAppleSignIn: true,
     supportsTablet: true,
   },
-  plugins: [...(config.plugins ?? []), "expo-apple-authentication"],
+  plugins: [
+    ...(config.plugins ?? []),
+    "expo-apple-authentication",
+    // GoogleSignin v16 pulls AppCheckCore (Swift pod), which depends on
+    // GoogleUtilities + RecaptchaInterop — non-modular pods that can't be
+    // statically linked into a Swift pod without module maps. Mark them
+    // modular so `pod install` succeeds on EAS prebuild.
+    [
+      "expo-build-properties",
+      {
+        ios: {
+          extraPods: [
+            { name: "GoogleUtilities", modular_headers: true },
+            { name: "RecaptchaInterop", modular_headers: true },
+          ],
+        },
+      },
+    ],
+  ],
   extra: {
     ...config.extra,
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
