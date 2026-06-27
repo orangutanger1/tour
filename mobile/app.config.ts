@@ -3,14 +3,15 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
-  // GoogleSignin needs the reversed iOS client ID registered as an Info.plist
-  // URL scheme. Derive it from the same client ID in .env (one source of truth):
-  // `<id>.apps.googleusercontent.com` -> `com.googleusercontent.apps.<id>`.
-  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
-  const googleIosUrlScheme = `com.googleusercontent.apps.${iosClientId.replace(
-    /\.apps\.googleusercontent\.com$/,
-    "",
-  )}`;
+  // Reversed iOS OAuth client ID, registered as an Info.plist URL scheme for
+  // native Google sign-in. Hardcoded (not env-derived) because EAS prebuild
+  // runs without our gitignored .env, so a derived scheme bakes empty and
+  // breaks sign-in at runtime. This value is public (it ships in every app
+  // binary) and static — like `bundleIdentifier` above.
+  // ponytail: keep in sync with EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID; only changes
+  // if the OAuth client is rotated.
+  const googleIosUrlScheme =
+    "com.googleusercontent.apps.210065939299-rrtu8qv5kdiv4qe17608kq68p4a65t2n";
 
   return {
   ...config,
