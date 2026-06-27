@@ -30,10 +30,9 @@ These produce the IDs/keys the code reads from env. Gather them once.
    - **Web** (used by Supabase + as `webClientId` for idToken),
    - **iOS** (bundle id `com.tour.local`).
 3. **Supabase Auth → Google provider** — Dashboard → Authentication → Providers → Google → enable, paste the **Web** client ID + secret.
-4. **Apple Developer** ($99/yr) → Certificates, Identifiers & Profiles:
-   - App ID with **Sign In with Apple** capability (bundle `com.tour.local`),
-   - a **Services ID**, and a **Sign in with Apple key**.
-5. **Supabase Auth → Apple provider** — enable, paste Services ID + key + team/key IDs.
+4. **Apple Developer** ($99/yr) → Certificates, Identifiers & Profiles → Identifiers → **+** → **App IDs → App**:
+   - Bundle ID `com.tour.local`, check **Sign In with Apple**, Register. That's the only Apple Developer step — native sign-in needs no Services ID, Key, or domain/return-URL web config (those are web-flow only).
+5. **Supabase Auth → Apple provider** — enable. **Client IDs** = `com.tour.local` (the bundle id; validates the native token). Leave **Secret Key (for OAuth)** blank — native-only.
 6. **EAS** — `npm i -g eas-cli`, `eas login`, then `eas build:configure` (Task 8 covers the build itself).
 
 Put the values into `mobile/.env` (gitignored) — see Task 1.
