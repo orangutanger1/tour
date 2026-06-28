@@ -72,22 +72,22 @@ export async function searchAutocomplete(opts: {
   query: string;
   httpFetch: HttpFetch;
   apiKey: string;
-}): Promise<string[]> {
+}): Promise<{ text: string; placeId: string }[]> {
   const { query, httpFetch, apiKey } = opts;
   const res = await httpFetch("https://places.googleapis.com/v1/places:autocomplete", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-    },
-    body: JSON.stringify({ input: query }),
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
+    body: JSON.stringify({
+      input: query,
+      includedPrimaryTypes: ["locality", "administrative_area_level_1", "country", "tourist_attraction"],
+    }),
   });
   if (!res.ok) throw new Error(`autocomplete: HTTP ${res.status}`);
   const data = await res.json() as {
-    suggestions?: Array<{ placePrediction?: { text?: { text?: string } } }>;
+    suggestions?: Array<{ placePrediction?: { placeId?: string; text?: { text?: string } } }>;
   };
   return (data.suggestions ?? [])
-    .map((s) => s.placePrediction?.text?.text)
-    .filter((t): t is string => typeof t === "string")
+    .map((s) => ({ text: s.placePrediction?.text?.text ?? "", placeId: s.placePrediction?.placeId ?? "" }))
+    .filter((s) => s.text && s.placeId)
     .slice(0, 5);
 }

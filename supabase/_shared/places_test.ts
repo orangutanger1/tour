@@ -56,16 +56,23 @@ Deno.test("fetchPois throws on non-OK response", async () => {
   assert(threw);
 });
 
-Deno.test("searchAutocomplete maps predictions to strings", async () => {
-  const httpFetch = ((_url: string, _init?: RequestInit) =>
-    Promise.resolve(new Response(JSON.stringify({
+Deno.test("searchAutocomplete sends includedPrimaryTypes and maps text+placeId", async () => {
+  let sentBody: any = null;
+  const httpFetch = ((_url: string, init?: RequestInit) => {
+    sentBody = JSON.parse(String(init?.body));
+    return Promise.resolve(new Response(JSON.stringify({
       suggestions: [
-        { placePrediction: { text: { text: "Lisbon, Portugal" } } },
-        { placePrediction: { text: { text: "Lisbon, OH, USA" } } },
+        { placePrediction: { placeId: "p1", text: { text: "Lisbon, Portugal" } } },
+        { placePrediction: { placeId: "p2", text: { text: "Lisbon, OH, USA" } } },
       ],
-    }), { status: 200 }))) as unknown as typeof fetch;
+    }), { status: 200 }));
+  }) as unknown as typeof fetch;
   const out = await searchAutocomplete({ query: "Lis", httpFetch: httpFetch as any, apiKey: "k" });
-  assertEquals(out, ["Lisbon, Portugal", "Lisbon, OH, USA"]);
+  assertEquals(out, [
+    { text: "Lisbon, Portugal", placeId: "p1" },
+    { text: "Lisbon, OH, USA", placeId: "p2" },
+  ]);
+  assertEquals(sentBody.includedPrimaryTypes, ["locality", "administrative_area_level_1", "country", "tourist_attraction"]);
 });
 
 Deno.test("searchAutocomplete returns [] for empty suggestions", async () => {
