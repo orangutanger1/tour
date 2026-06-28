@@ -1,6 +1,6 @@
 // mobile/app/(app)/onboarding.tsx
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, Button, ScrollView } from "react-native";
+import { View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   INTERESTS, MAX_TRIP_DAYS, stateFromProfile, canContinue, buildRequest, prefsFromState,
@@ -10,23 +10,10 @@ import { getProfile, upsertProfile } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
 import { useTripFlow } from "../../lib/tripFlow";
 import type { Prefs } from "../../lib/types";
+import { Screen, Text, Button, Chip, Input, Card } from "../../components/ui";
 
 const BUDGETS: Prefs["budget"][] = ["low", "mid", "high"];
 const PACES: Prefs["pace"][] = ["relaxed", "balanced", "packed"];
-
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1,
-        borderColor: active ? "#2563eb" : "#ccc", backgroundColor: active ? "#dbeafe" : "transparent",
-      }}
-    >
-      <Text style={{ color: active ? "#1e3a8a" : "#333" }}>{label}</Text>
-    </Pressable>
-  );
-}
 
 export default function Onboarding() {
   const router = useRouter();
@@ -52,65 +39,66 @@ export default function Onboarding() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 24, gap: 20 }}>
+    <Screen scroll>
+      <View className="flex-row gap-2 mb-2">
+        {[0, 1, 2].map((i) => (
+          <View key={i} className={`h-1.5 flex-1 rounded-pill ${i <= step ? "bg-accent" : "bg-surface-2"}`} />
+        ))}
+      </View>
+
       {step === 0 && (
-        <View style={{ gap: 16 }}>
-          <Text style={{ fontSize: 18, fontWeight: "600" }}>What do you like?</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <View className="gap-5">
+          <Text variant="title">What do you like?</Text>
+          <View className="flex-row flex-wrap gap-2">
             {INTERESTS.map((i) => (
-              <Chip key={i} label={i} active={state.interests.includes(i)} onPress={() => toggleInterest(i)} />
+              <Chip key={i} label={i} selected={state.interests.includes(i)} onPress={() => toggleInterest(i)} />
             ))}
           </View>
-          <Text style={{ fontWeight: "600" }}>Budget</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <Text variant="label">Budget</Text>
+          <View className="flex-row gap-2">
             {BUDGETS.map((b) => (
-              <Chip key={b} label={b} active={state.budget === b} onPress={() => setState((s) => ({ ...s, budget: b }))} />
+              <Chip key={b} label={b} selected={state.budget === b} onPress={() => setState((s) => ({ ...s, budget: b }))} />
             ))}
           </View>
-          <Text style={{ fontWeight: "600" }}>Pace</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <Text variant="label">Pace</Text>
+          <View className="flex-row gap-2">
             {PACES.map((p) => (
-              <Chip key={p} label={p} active={state.pace === p} onPress={() => setState((s) => ({ ...s, pace: p }))} />
+              <Chip key={p} label={p} selected={state.pace === p} onPress={() => setState((s) => ({ ...s, pace: p }))} />
             ))}
           </View>
         </View>
       )}
 
       {step === 1 && (
-        <View style={{ gap: 16 }}>
-          <Text style={{ fontSize: 18, fontWeight: "600" }}>Where and how long?</Text>
-          <TextInput
-            placeholder="Location (e.g. Lisbon)"
-            value={state.location}
-            onChangeText={(t) => setState((s) => ({ ...s, location: t }))}
-            style={{ borderWidth: 1, borderColor: "#ccc", borderRadius: 8, padding: 12 }}
-          />
-          <Text style={{ fontWeight: "600" }}>Days: {state.tripDays}</Text>
-          <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-            <Button title="−" onPress={() => setState((s) => ({ ...s, tripDays: Math.max(1, s.tripDays - 1) }))} />
-            <Button title="+" onPress={() => setState((s) => ({ ...s, tripDays: Math.min(MAX_TRIP_DAYS, s.tripDays + 1) }))} />
+        <View className="gap-5">
+          <Text variant="title">Where and how long?</Text>
+          <Input placeholder="Location (e.g. Lisbon)" value={state.location} onChangeText={(t) => setState((s) => ({ ...s, location: t }))} />
+          <Text variant="label">Days: {state.tripDays}</Text>
+          <View className="flex-row gap-3">
+            <Button title="–" variant="secondary" size="sm" onPress={() => setState((s) => ({ ...s, tripDays: Math.max(1, s.tripDays - 1) }))} />
+            <Button title="+" variant="secondary" size="sm" onPress={() => setState((s) => ({ ...s, tripDays: Math.min(MAX_TRIP_DAYS, s.tripDays + 1) }))} />
           </View>
         </View>
       )}
 
       {step === 2 && (
-        <View style={{ gap: 12 }}>
-          <Text style={{ fontSize: 18, fontWeight: "600" }}>Review</Text>
-          <Text>Location: {state.location}</Text>
-          <Text>Days: {state.tripDays}</Text>
-          <Text>Interests: {state.interests.join(", ")}</Text>
-          <Text>Budget: {state.budget} · Pace: {state.pace}</Text>
-        </View>
+        <Card className="gap-2">
+          <Text variant="title">Review</Text>
+          <Text variant="body">Location: {state.location}</Text>
+          <Text variant="body">Days: {state.tripDays}</Text>
+          <Text variant="body">Interests: {state.interests.join(", ")}</Text>
+          <Text variant="body">Budget: {state.budget} · Pace: {state.pace}</Text>
+        </Card>
       )}
 
-      <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 12 }}>
-        <Button title="Back" disabled={step === 0} onPress={() => setStep((s) => Math.max(0, s - 1))} />
+      <View className="flex-row justify-between gap-3 mt-4">
+        <Button title="Back" variant="ghost" disabled={step === 0} onPress={() => setStep((s) => Math.max(0, s - 1))} className="flex-1" />
         {step < 2 ? (
-          <Button title="Next" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} />
+          <Button title="Next" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} className="flex-1" />
         ) : (
-          <Button title="Generate" onPress={onGenerate} />
+          <Button title="Generate" onPress={onGenerate} className="flex-1" />
         )}
       </View>
-    </ScrollView>
+    </Screen>
   );
 }

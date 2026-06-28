@@ -1,8 +1,9 @@
 // mobile/app/(app)/generating.tsx
 import { useEffect } from "react";
-import { View, Text, ActivityIndicator, Button } from "react-native";
+import { View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTripFlow } from "../../lib/tripFlow";
+import { Screen, Text, Button, Loading } from "../../components/ui";
 
 export default function Generating() {
   const { status, error, lastRequest, generate } = useTripFlow();
@@ -14,19 +15,22 @@ export default function Generating() {
 
   if (status === "error") {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 24 }}>
-        <Text style={{ fontSize: 16, fontWeight: "600" }}>Couldn't build your itinerary</Text>
-        <Text style={{ color: "#888", textAlign: "center" }}>{error?.message ?? "Something went wrong."}</Text>
-        <Button title="Try again" onPress={() => lastRequest && generate(lastRequest)} />
-        <Button title="Edit trip" onPress={() => router.replace("/onboarding")} />
-      </View>
+      <Screen>
+        <View className="flex-1 items-center justify-center gap-3">
+          <Text variant="title" className="text-center">Couldn't build your itinerary</Text>
+          <Text variant="body" className="text-center text-ink-muted">{error?.message ?? "Something went wrong."}</Text>
+        </View>
+        <View className="gap-3 pb-2">
+          <Button title="Try again" onPress={() => lastRequest && generate(lastRequest)} />
+          <Button title="Edit trip" variant="ghost" onPress={() => router.replace("/onboarding")} />
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 16 }}>
-      <ActivityIndicator size="large" />
-      <Text>Building your itinerary…</Text>
-    </View>
+    <Screen>
+      <Loading label="Building your itinerary…" />
+    </Screen>
   );
 }
