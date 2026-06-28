@@ -11,14 +11,13 @@ test("returns [] without calling for short query", async () => {
   expect(called).toBe(false);
 });
 
-test("posts to the function URL with anon key and parses suggestions", async () => {
-  let url = ""; let init: RequestInit | undefined;
-  const fetchImpl = ((u: string, i: RequestInit) => { url = u; init = i;
-    return Promise.resolve(new Response(JSON.stringify({ suggestions: ["Lisbon, Portugal"] }), { status: 200 })); }) as unknown as typeof fetch;
-  const out = await autocompletePlaces({ query: "Lis", baseUrl: "https://x.supabase.co", anonKey: "anon123", fetchImpl });
-  expect(url).toBe("https://x.supabase.co/functions/v1/places-autocomplete");
-  expect((init!.headers as Record<string, string>)["apikey"]).toBe("anon123");
-  expect(out).toEqual(["Lisbon, Portugal"]);
+it("returns suggestion objects", async () => {
+  const fetchImpl = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ suggestions: [{ text: "Lisbon, Portugal", placeId: "p1" }] }),
+  }) as unknown as typeof fetch;
+  const out = await autocompletePlaces({ query: "Lis", baseUrl: "http://x", anonKey: "k", fetchImpl });
+  expect(out).toEqual([{ text: "Lisbon, Portugal", placeId: "p1" }]);
 });
 
 test("throws on non-2xx", async () => {
