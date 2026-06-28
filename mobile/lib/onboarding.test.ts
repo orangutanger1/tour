@@ -56,3 +56,8 @@ test("buildRequest trims location and carries prefs", () => {
     prefs: { interests: ["food"], budget: "mid", pace: "balanced" },
   });
 });
+
+it("buildRequest includes destinationPlaceId when set", () => {
+  const s = { ...stateFromProfile(null), location: "Lisbon", destinationPlaceId: "p1" };
+  expect(buildRequest(s).destinationPlaceId).toBe("p1");
+});

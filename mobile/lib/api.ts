@@ -5,6 +5,7 @@ export interface GenerateRequest {
   location: string;
   tripDays: number;
   prefs: Prefs;
+  destinationPlaceId?: string;
 }
 
 export interface GenerateResult {

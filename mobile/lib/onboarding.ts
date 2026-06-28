@@ -11,6 +11,7 @@ export interface OnboardingState {
   pace: Prefs["pace"];
   location: string;
   tripDays: number;
+  destinationPlaceId?: string;
 }
 
 export function stateFromProfile(prefs: Prefs | null): OnboardingState {
@@ -20,6 +21,7 @@ export function stateFromProfile(prefs: Prefs | null): OnboardingState {
     pace: prefs?.pace ?? "balanced",
     location: "",
     tripDays: 3,
+    destinationPlaceId: undefined,
   };
 }
 
@@ -34,5 +36,5 @@ export function prefsFromState(s: OnboardingState): Prefs {
 }
 
 export function buildRequest(s: OnboardingState): GenerateRequest {
-  return { location: s.location.trim(), tripDays: s.tripDays, prefs: prefsFromState(s) };
+  return { location: s.location.trim(), tripDays: s.tripDays, prefs: prefsFromState(s), destinationPlaceId: s.destinationPlaceId };
 }

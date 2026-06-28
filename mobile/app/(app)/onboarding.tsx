@@ -36,7 +36,7 @@ export default function Onboarding() {
   const tripFlow = useTripFlow();
   const [step, setStep] = useState(0);
   const [state, setState] = useState<OnboardingState>(stateFromProfile(null));
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<{ text: string; placeId: string }[]>([]);
   const debouncedLocation = useDebouncedValue(state.location, 300);
 
   useEffect(() => {
@@ -112,13 +112,13 @@ export default function Onboarding() {
         <View className="gap-4">
           <Text variant="title">Where and how long?</Text>
           <Input placeholder="Location (e.g. Lisbon)" value={state.location}
-            onChangeText={(t) => setState((s) => ({ ...s, location: t }))} autoCorrect={false} />
+            onChangeText={(t) => setState((s) => ({ ...s, location: t, destinationPlaceId: undefined }))} autoCorrect={false} />
           {suggestions.length > 0 && state.location.trim().length >= 2 ? (
             <View className="gap-1">
               {suggestions.map((sug) => (
-                <Pressable key={sug} onPress={() => { setState((s) => ({ ...s, location: sug })); setSuggestions([]); }}
+                <Pressable key={sug.placeId} onPress={() => { setState((s) => ({ ...s, location: sug.text, destinationPlaceId: sug.placeId })); setSuggestions([]); }}
                   className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
-                  <Text variant="body">{sug}</Text>
+                  <Text variant="body">{sug.text}</Text>
                 </Pressable>
               ))}
             </View>
