@@ -1,5 +1,5 @@
 // supabase/functions/generate-itinerary/handler_test.ts
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals, assert } from "jsr:@std/assert";
 import { handleGenerate, DAILY_CAP, type HandlerDeps } from "./handler.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import type { Poi, Prefs, Itinerary } from "../../_shared/types.ts";
@@ -12,6 +12,7 @@ const itinerary: Itinerary = { days: [{ day: 1, lodgingPlaceId: null, stops: [{ 
 function baseDeps(over: Partial<HandlerDeps> = {}): HandlerDeps {
   return {
     countTripsToday: () => Promise.resolve(0),
+    resolveDestination: () => Promise.resolve({ center: { lat: 0, lng: 0 }, viewport: null }),
     fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : attractions),
     curate: () => Promise.resolve(itinerary),
     orderStops: ({ stops }) => Promise.resolve(stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 7 }))),
@@ -42,4 +43,18 @@ Deno.test("happy path returns trip id + itinerary with lodging anchor and travel
 Deno.test("returns 502 on CurationError", async () => {
   const r = await handleGenerate({ location: "X", tripDays: 1, prefs }, "u1", baseDeps({ curate: () => Promise.reject(new CurationError("boom")) }));
   assertEquals(r.status, 502);
+});
+
+Deno.test("handleGenerate resolves destination and passes locationBias + WALK for compact", async () => {
+  let biasRadiusKm = 0, sawMode = "";
+  const deps = baseDeps({
+    resolveDestination: () => Promise.resolve({ center: { lat: 1, lng: 2 }, viewport: null }),
+    fetchPois: (o: any) => { biasRadiusKm = o.locationBias?.radiusKm ?? 0; return Promise.resolve([{ placeId: "A", name: "A", kind: o.kind, lat: 1, lng: 2 }]); },
+    orderStops: (o: any) => { sawMode = o.travelMode; return Promise.resolve([{ placeId: "A", travelMinutesFromPrev: 0 }]); },
+  });
+  const req = { location: "X", tripDays: 1, destinationPlaceId: "p1", prefs: { interests: [], budget: "mid", pace: "balanced", transport: "compact" } };
+  const out = await handleGenerate(req as any, "u1", deps);
+  assertEquals(out.status, 200);
+  assert(biasRadiusKm >= 2 && biasRadiusKm <= 5);
+  assertEquals(sawMode, "WALK");
 });

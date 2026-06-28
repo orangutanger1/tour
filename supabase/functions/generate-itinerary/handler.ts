@@ -1,6 +1,7 @@
 // supabase/functions/generate-itinerary/handler.ts
 import type { Itinerary, Poi, Prefs } from "../../_shared/types.ts";
 import { CurationError } from "../../_shared/curate.ts";
+import { areaRadiusKm, type Viewport } from "../../_shared/area.ts";
 
 export const DAILY_CAP = 10;
 
@@ -13,9 +14,10 @@ export interface GenerateRequest {
 
 export interface HandlerDeps {
   countTripsToday(userId: string): Promise<number>;
-  fetchPois(opts: { location: string; kind: Poi["kind"]; prefs: Prefs }): Promise<Poi[]>;
+  resolveDestination(opts: { placeId?: string; location: string }): Promise<{ center: { lat: number; lng: number }; viewport: Viewport }>;
+  fetchPois(opts: { location: string; kind: Poi["kind"]; prefs: Prefs; locationBias?: { center: { lat: number; lng: number }; radiusKm: number } }): Promise<Poi[]>;
   curate(opts: { pois: Poi[]; prefs: Prefs; tripDays: number }): Promise<Itinerary>;
-  orderStops(opts: { stops: Poi[]; anchor: { lat: number; lng: number } }): Promise<{ placeId: string; travelMinutesFromPrev: number }[]>;
+  orderStops(opts: { stops: Poi[]; anchor: { lat: number; lng: number }; travelMode?: "WALK" | "DRIVE" }): Promise<{ placeId: string; travelMinutesFromPrev: number }[]>;
   saveTrip(opts: { userId: string; req: GenerateRequest; itinerary: Itinerary }): Promise<string>;
 }
 
@@ -31,14 +33,21 @@ export async function handleGenerate(
     return { status: 429, body: { error: "daily generation limit reached" } };
   }
 
+  const dest = await deps.resolveDestination({ placeId: body.destinationPlaceId, location: body.location });
+  const radiusKm = areaRadiusKm({ viewport: dest.viewport, transport: body.prefs.transport });
+  const hasCenter = dest.center.lat !== 0 || dest.center.lng !== 0;
+  const locationBias = hasCenter ? { center: dest.center, radiusKm } : undefined;
+  const travelMode = body.prefs.transport === "compact" ? "WALK" as const : "DRIVE" as const;
+
   const [attractions, food, lodging] = await Promise.all([
-    deps.fetchPois({ location: body.location, kind: "attraction", prefs: body.prefs }),
-    deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs }),
-    deps.fetchPois({ location: body.location, kind: "lodging", prefs: body.prefs }),
+    deps.fetchPois({ location: body.location, kind: "attraction", prefs: body.prefs, locationBias }),
+    deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias }),
+    deps.fetchPois({ location: body.location, kind: "lodging", prefs: body.prefs, locationBias }),
   ]);
 
   const pois = [...attractions, ...food];
   const anchorPoi = lodging[0] ?? null;
+  const anchor = anchorPoi ? { lat: anchorPoi.lat, lng: anchorPoi.lng } : dest.center;
 
   let itinerary: Itinerary;
   try {
@@ -51,9 +60,8 @@ export async function handleGenerate(
   const byId = new Map(pois.map((p) => [p.placeId, p]));
   for (const day of itinerary.days) {
     day.lodgingPlaceId = anchorPoi?.placeId ?? null;
-    if (!anchorPoi) continue;
     const dayPois = day.stops.map((s) => byId.get(s.placeId)).filter((p): p is Poi => !!p);
-    const ordered = await deps.orderStops({ stops: dayPois, anchor: { lat: anchorPoi.lat, lng: anchorPoi.lng } });
+    const ordered = await deps.orderStops({ stops: dayPois, anchor, travelMode });
     const minutesById = new Map(ordered.map((o) => [o.placeId, o.travelMinutesFromPrev]));
     // reorder stops to match optimized order, attach travel times
     day.stops = ordered.map((o) => {
