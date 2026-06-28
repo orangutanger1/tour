@@ -1,6 +1,6 @@
 // supabase/_shared/places_test.ts
 import { assert, assertEquals } from "jsr:@std/assert";
-import { fetchPois } from "./places.ts";
+import { fetchPois, searchAutocomplete } from "./places.ts";
 import type { Poi, Prefs } from "./types.ts";
 
 const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced" };
@@ -54,4 +54,22 @@ Deno.test("fetchPois throws on non-OK response", async () => {
   let threw = false;
   try { await fetchPois({ location: "X", kind: "food", prefs, httpFetch, apiKey: "k" }); } catch { threw = true; }
   assert(threw);
+});
+
+Deno.test("searchAutocomplete maps predictions to strings", async () => {
+  const httpFetch = ((_url: string, _init?: RequestInit) =>
+    Promise.resolve(new Response(JSON.stringify({
+      suggestions: [
+        { placePrediction: { text: { text: "Lisbon, Portugal" } } },
+        { placePrediction: { text: { text: "Lisbon, OH, USA" } } },
+      ],
+    }), { status: 200 }))) as unknown as typeof fetch;
+  const out = await searchAutocomplete({ query: "Lis", httpFetch: httpFetch as any, apiKey: "k" });
+  assertEquals(out, ["Lisbon, Portugal", "Lisbon, OH, USA"]);
+});
+
+Deno.test("searchAutocomplete returns [] for empty suggestions", async () => {
+  const httpFetch = (() => Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))) as unknown as typeof fetch;
+  const out = await searchAutocomplete({ query: "zzzz", httpFetch: httpFetch as any, apiKey: "k" });
+  assertEquals(out, []);
 });

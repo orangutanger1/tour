@@ -3,7 +3,7 @@ import type { Prefs } from "./types";
 import type { GenerateRequest } from "./api";
 
 export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", "art", "shopping"] as const;
-export const MAX_TRIP_DAYS = 14;
+export const MAX_TRIP_DAYS = 30;
 
 export interface OnboardingState {
   interests: string[];
