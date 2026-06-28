@@ -1,4 +1,4 @@
-import { getStopCoords } from "./poi";
+import { getStopCoords, decodePolyline } from "./poi";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function fakeClient(opts: {
@@ -48,4 +48,10 @@ test("queries place_id with the given ids", async () => {
 test("throws on query error", async () => {
   const client = fakeClient({ result: { data: null, error: { message: "boom" } } });
   await expect(getStopCoords(client, ["A"])).rejects.toBeTruthy();
+});
+
+test("decodes the canonical Google polyline", () => {
+  const pts = decodePolyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@");
+  expect(pts.map((p) => [Math.round(p.latitude * 1000) / 1000, Math.round(p.longitude * 1000) / 1000]))
+    .toEqual([[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]);
 });
