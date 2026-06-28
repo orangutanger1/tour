@@ -21,6 +21,7 @@ export async function orderStops(opts: {
   httpFetch: HttpFetch;
   apiKey: string;
   maxStops?: number;
+  travelMode?: "WALK" | "DRIVE";
 }): Promise<Ordered[]> {
   const { anchor, httpFetch, apiKey } = opts;
   const capped = opts.stops.slice(0, opts.maxStops ?? 8);
@@ -40,7 +41,7 @@ export async function orderStops(opts: {
         origin: waypoint(anchor.lat, anchor.lng),
         destination: waypoint(anchor.lat, anchor.lng),
         intermediates: capped.map((s) => waypoint(s.lat, s.lng)),
-        travelMode: "DRIVE",
+        travelMode: opts.travelMode ?? "DRIVE",
         optimizeWaypointOrder: true,
       }),
     });

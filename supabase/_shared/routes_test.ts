@@ -53,3 +53,13 @@ Deno.test("orderStops returns [] for no stops", async () => {
   const out = await orderStops({ stops: [], anchor, httpFetch: () => Promise.resolve(res({})), apiKey: "k" });
   assertEquals(out, []);
 });
+
+Deno.test("orderStops sends travelMode WALK when set", async () => {
+  let sentBody: unknown = null;
+  const body = { routes: [{ optimizedIntermediateWaypointIndex: [0, 1, 2], legs: [{ duration: "60s" }, { duration: "60s" }, { duration: "60s" }, { duration: "60s" }] }] };
+  await orderStops({
+    stops, anchor, apiKey: "k", travelMode: "WALK",
+    httpFetch: (_u, init) => { sentBody = JSON.parse(String((init as RequestInit).body)); return Promise.resolve(res(body)); },
+  });
+  assertEquals((sentBody as { travelMode: string }).travelMode, "WALK");
+});
