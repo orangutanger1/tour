@@ -4,7 +4,7 @@ import { handleGenerate, DAILY_CAP, type HandlerDeps } from "./handler.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import type { Poi, Prefs, Itinerary } from "../../_shared/types.ts";
 
-const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced" };
+const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced", transport: "balanced" };
 const attractions: Poi[] = [{ placeId: "A", name: "A", kind: "attraction", lat: 0, lng: 0 }];
 const lodging: Poi[] = [{ placeId: "L", name: "Hotel", kind: "lodging", lat: 9, lng: 9, deepLink: "https://book/L" }];
 const itinerary: Itinerary = { days: [{ day: 1, lodgingPlaceId: null, stops: [{ placeId: "A", name: "A", blurb: "x" }] }] };

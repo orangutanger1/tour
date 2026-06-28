@@ -5,7 +5,7 @@ import {
 import type { Prefs } from "./types";
 
 const base: OnboardingState = {
-  interests: ["food"], budget: "mid", pace: "balanced", location: "Lisbon", tripDays: 3,
+  interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced", location: "Lisbon", tripDays: 3,
 };
 
 test("INTERESTS has the fixed taxonomy", () => {
@@ -13,7 +13,7 @@ test("INTERESTS has the fixed taxonomy", () => {
 });
 
 test("stateFromProfile seeds from prefs, blank trip fields", () => {
-  const prefs: Prefs = { interests: ["art"], budget: "high", pace: "packed" };
+  const prefs: Prefs = { interests: ["art"], budget: "high", pace: "packed", transport: "balanced" };
   const s = stateFromProfile(prefs);
   expect(s.interests).toEqual(["art"]);
   expect(s.budget).toBe("high");
@@ -46,18 +46,24 @@ test("canContinue step 2 (review) is always true", () => {
 });
 
 test("prefsFromState drops trip fields", () => {
-  expect(prefsFromState(base)).toEqual({ interests: ["food"], budget: "mid", pace: "balanced" });
+  expect(prefsFromState(base)).toEqual({ interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced" });
 });
 
 test("buildRequest trims location and carries prefs", () => {
   expect(buildRequest({ ...base, location: "  Porto " })).toEqual({
     location: "Porto",
     tripDays: 3,
-    prefs: { interests: ["food"], budget: "mid", pace: "balanced" },
+    prefs: { interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced" },
   });
 });
 
 it("buildRequest includes destinationPlaceId when set", () => {
   const s = { ...stateFromProfile(null), location: "Lisbon", destinationPlaceId: "p1" };
   expect(buildRequest(s).destinationPlaceId).toBe("p1");
+});
+
+test("defaults transport to balanced and round-trips it", () => {
+  expect(stateFromProfile(null).transport).toBe("balanced");
+  const s = { ...stateFromProfile(null), transport: "compact" as const };
+  expect(prefsFromState(s).transport).toBe("compact");
 });

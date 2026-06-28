@@ -3,7 +3,7 @@ import { assert, assertEquals } from "jsr:@std/assert";
 import { fetchPois, searchAutocomplete, fetchPlaceDetails } from "./places.ts";
 import type { Poi, Prefs } from "./types.ts";
 
-const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced" };
+const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced", transport: "balanced" };
 
 function fakeResponse(body: unknown, ok = true, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });

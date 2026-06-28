@@ -3,6 +3,7 @@ export interface Prefs {
   interests: string[];                 // e.g. ["scenic", "food", "history"]
   budget: "low" | "mid" | "high";
   pace: "relaxed" | "balanced" | "packed";
+  transport: "compact" | "balanced" | "far";
   diet?: string[];                     // optional, e.g. ["vegetarian"]
   accessibility?: string[];            // optional
 }

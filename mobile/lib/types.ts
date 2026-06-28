@@ -4,6 +4,7 @@ export interface Prefs {
   interests: string[];
   budget: "low" | "mid" | "high";
   pace: "relaxed" | "balanced" | "packed";
+  transport: "compact" | "balanced" | "far";
   diet?: string[];
   accessibility?: string[];
 }

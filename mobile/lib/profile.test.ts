@@ -2,7 +2,7 @@ import { getProfile, upsertProfile } from "./profile";
 import type { Prefs } from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const prefs: Prefs = { interests: ["food"], budget: "mid", pace: "balanced" };
+const prefs: Prefs = { interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced" };
 
 function fakeClient(opts: {
   user?: { id: string } | null;
