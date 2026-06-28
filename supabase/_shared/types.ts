@@ -31,6 +31,7 @@ export interface ItineraryDay {
   day: number;                         // 1-indexed
   lodgingPlaceId: string | null;
   stops: Stop[];
+  routePolyline?: string;
 }
 
 export interface Itinerary {

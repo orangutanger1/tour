@@ -15,7 +15,7 @@ function baseDeps(over: Partial<HandlerDeps> = {}): HandlerDeps {
     resolveDestination: () => Promise.resolve({ center: { lat: 0, lng: 0 }, viewport: null }),
     fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : attractions),
     curate: () => Promise.resolve(itinerary),
-    orderStops: ({ stops }) => Promise.resolve(stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 7 }))),
+    orderStops: ({ stops }) => Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 7 })), polyline: undefined }),
     saveTrip: () => Promise.resolve("trip-123"),
     ...over,
   };
@@ -50,11 +50,18 @@ Deno.test("handleGenerate resolves destination and passes locationBias + WALK fo
   const deps = baseDeps({
     resolveDestination: () => Promise.resolve({ center: { lat: 1, lng: 2 }, viewport: null }),
     fetchPois: (o: any) => { biasRadiusKm = o.locationBias?.radiusKm ?? 0; return Promise.resolve([{ placeId: "A", name: "A", kind: o.kind, lat: 1, lng: 2 }]); },
-    orderStops: (o: any) => { sawMode = o.travelMode; return Promise.resolve([{ placeId: "A", travelMinutesFromPrev: 0 }]); },
+    orderStops: (o: any) => { sawMode = o.travelMode; return Promise.resolve({ ordered: [{ placeId: "A", travelMinutesFromPrev: 0 }], polyline: undefined }); },
   });
   const req = { location: "X", tripDays: 1, destinationPlaceId: "p1", prefs: { interests: [], budget: "mid", pace: "balanced", transport: "compact" } };
   const out = await handleGenerate(req as any, "u1", deps);
   assertEquals(out.status, 200);
   assert(biasRadiusKm >= 2 && biasRadiusKm <= 5);
   assertEquals(sawMode, "WALK");
+});
+
+Deno.test("handleGenerate attaches routePolyline to each day", async () => {
+  const deps = baseDeps({ orderStops: () => Promise.resolve({ ordered: [{ placeId: "A", travelMinutesFromPrev: 0 }], polyline: "poly1" }) });
+  const req = { location: "X", tripDays: 1, destinationPlaceId: "p1", prefs: { interests: [], budget: "mid", pace: "balanced", transport: "balanced" } };
+  const out: any = await handleGenerate(req as any, "u1", deps);
+  assertEquals(out.body.itinerary.days[0].routePolyline, "poly1");
 });

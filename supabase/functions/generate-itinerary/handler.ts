@@ -17,7 +17,7 @@ export interface HandlerDeps {
   resolveDestination(opts: { placeId?: string; location: string }): Promise<{ center: { lat: number; lng: number }; viewport: Viewport }>;
   fetchPois(opts: { location: string; kind: Poi["kind"]; prefs: Prefs; locationBias?: { center: { lat: number; lng: number }; radiusKm: number } }): Promise<Poi[]>;
   curate(opts: { pois: Poi[]; prefs: Prefs; tripDays: number }): Promise<Itinerary>;
-  orderStops(opts: { stops: Poi[]; anchor: { lat: number; lng: number }; travelMode?: "WALK" | "DRIVE" }): Promise<{ placeId: string; travelMinutesFromPrev: number }[]>;
+  orderStops(opts: { stops: Poi[]; anchor: { lat: number; lng: number }; travelMode?: "WALK" | "DRIVE" }): Promise<{ ordered: { placeId: string; travelMinutesFromPrev: number }[]; polyline?: string }>;
   saveTrip(opts: { userId: string; req: GenerateRequest; itinerary: Itinerary }): Promise<string>;
 }
 
@@ -61,13 +61,14 @@ export async function handleGenerate(
   for (const day of itinerary.days) {
     day.lodgingPlaceId = anchorPoi?.placeId ?? null;
     const dayPois = day.stops.map((s) => byId.get(s.placeId)).filter((p): p is Poi => !!p);
-    const ordered = await deps.orderStops({ stops: dayPois, anchor, travelMode });
+    const { ordered, polyline } = await deps.orderStops({ stops: dayPois, anchor, travelMode });
     const minutesById = new Map(ordered.map((o) => [o.placeId, o.travelMinutesFromPrev]));
     // reorder stops to match optimized order, attach travel times
     day.stops = ordered.map((o) => {
       const stop = day.stops.find((s) => s.placeId === o.placeId)!;
       return { ...stop, travelMinutesFromPrev: minutesById.get(o.placeId) };
     });
+    day.routePolyline = polyline;
   }
 
   const tripId = await deps.saveTrip({ userId, req: body, itinerary });
