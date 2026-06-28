@@ -12,7 +12,8 @@ export async function handleAutocomplete(
   try {
     const suggestions = await deps.search(query);
     return { status: 200, body: { suggestions } };
-  } catch {
+  } catch (e) {
+    console.error("places-autocomplete upstream error:", e instanceof Error ? e.message : e);
     return { status: 502, body: { error: "autocomplete failed" } };
   }
 }
