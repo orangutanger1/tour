@@ -27,3 +27,15 @@ Deno.test("buildPrompt forbids inventing places", () => {
 Deno.test("buildPrompt includes preferences", () => {
   assertStringIncludes(buildPrompt(pois, prefs, 2), "history");
 });
+
+Deno.test("buildPrompt encodes pace as stops/day (packed)", () => {
+  const p = buildPrompt(pois, { ...prefs, pace: "packed" }, 2);
+  assertStringIncludes(p, "6");
+  assertStringIncludes(p, "stops per day");
+});
+
+Deno.test("buildPrompt encodes pace as stops/day (relaxed)", () => {
+  const p = buildPrompt(pois, { ...prefs, pace: "relaxed" }, 2);
+  assertStringIncludes(p, "2");
+  assertStringIncludes(p, "stops per day");
+});
