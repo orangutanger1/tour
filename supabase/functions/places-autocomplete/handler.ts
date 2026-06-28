@@ -1,6 +1,6 @@
 // supabase/functions/places-autocomplete/handler.ts
 export interface AutocompleteDeps {
-  search(query: string): Promise<string[]>;
+  search(query: string): Promise<{ text: string; placeId: string }[]>;
 }
 
 export async function handleAutocomplete(
