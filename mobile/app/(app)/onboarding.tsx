@@ -148,7 +148,7 @@ export default function Onboarding() {
       )}
 
       <View className="flex-row justify-between gap-3 mt-4">
-        <Button title="Back" variant="ghost" disabled={step === 0} onPress={() => setStep((s) => Math.max(0, s - 1))} className="flex-1" />
+        <Button title="Back" variant="ghost" onPress={() => (step === 0 ? router.back() : setStep((s) => s - 1))} className="flex-1" />
         {step < 2 ? (
           <Button title="Next" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} className="flex-1" />
         ) : (
