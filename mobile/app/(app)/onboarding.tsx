@@ -28,6 +28,11 @@ const PACES: { value: Prefs["pace"]; label: string; desc: string }[] = [
   { value: "balanced", label: "Balanced", desc: "4–5 stops/day" },
   { value: "packed", label: "Packed", desc: "6–8 stops/day" },
 ];
+const TRANSPORTS: { value: Prefs["transport"]; label: string; desc: string }[] = [
+  { value: "compact", label: "Compact", desc: "Stay close. Walkable cluster, minimal transit." },
+  { value: "balanced", label: "Balanced", desc: "City + nearby. Some driving." },
+  { value: "far", label: "Far-ranging", desc: "Cover a wide region. Longer legs OK." },
+];
 const DAY_PRESETS = [3, 5, 7, 10, 14];
 
 export default function Onboarding() {
@@ -105,6 +110,16 @@ export default function Onboarding() {
               </Pressable>
             ))}
           </View>
+          <Text variant="label">Transport</Text>
+          <View className="gap-2">
+            {TRANSPORTS.map((t) => (
+              <Pressable key={t.value} onPress={() => setState((s) => ({ ...s, transport: t.value }))}
+                className={`p-3 rounded-lg border ${state.transport === t.value ? "bg-accent-soft border-accent" : "bg-surface border-border"}`}>
+                <Text variant="label" className={state.transport === t.value ? "text-accent" : "text-ink"}>{t.label}</Text>
+                <Text variant="caption">{t.desc}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       )}
 
@@ -144,6 +159,7 @@ export default function Onboarding() {
           <Text variant="body">Days: {state.tripDays}</Text>
           <Text variant="body">Interests: {state.interests.join(", ")}</Text>
           <Text variant="body">Budget: {state.budget} · Pace: {state.pace}</Text>
+          <Text variant="body">Transport: {state.transport}</Text>
         </Card>
       )}
 
