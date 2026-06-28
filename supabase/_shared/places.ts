@@ -24,6 +24,8 @@ const BUDGET_CAP: Record<Prefs["budget"], number> = { low: 1, mid: 2, high: 4 };
 const FIELD_MASK =
   "places.id,places.displayName,places.location,places.priceLevel,places.rating,places.formattedAddress";
 
+const DETAILS_FIELD_MASK = "location,viewport,types,displayName";
+
 export async function fetchPois(opts: {
   location: string;
   kind: Poi["kind"];
@@ -90,4 +92,33 @@ export async function searchAutocomplete(opts: {
     .map((s) => ({ text: s.placePrediction?.text?.text ?? "", placeId: s.placePrediction?.placeId ?? "" }))
     .filter((s) => s.text && s.placeId)
     .slice(0, 5);
+}
+
+export async function fetchPlaceDetails(opts: {
+  placeId: string; httpFetch: HttpFetch; apiKey: string;
+}): Promise<{
+  center: { lat: number; lng: number };
+  viewport: { low: { lat: number; lng: number }; high: { lat: number; lng: number } } | null;
+  types: string[];
+  name: string;
+}> {
+  const { placeId, httpFetch, apiKey } = opts;
+  const res = await httpFetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+    method: "GET",
+    headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": DETAILS_FIELD_MASK },
+  });
+  if (!res.ok) throw new Error(`place details: HTTP ${res.status}`);
+  const d = await res.json() as {
+    location?: { latitude?: number; longitude?: number };
+    viewport?: { low?: { latitude?: number; longitude?: number }; high?: { latitude?: number; longitude?: number } };
+    types?: string[];
+    displayName?: { text?: string };
+  };
+  const pt = (p?: { latitude?: number; longitude?: number }) => ({ lat: p?.latitude ?? 0, lng: p?.longitude ?? 0 });
+  return {
+    center: pt(d.location),
+    viewport: d.viewport?.low && d.viewport?.high ? { low: pt(d.viewport.low), high: pt(d.viewport.high) } : null,
+    types: d.types ?? [],
+    name: d.displayName?.text ?? "",
+  };
 }

@@ -1,6 +1,6 @@
 // supabase/_shared/places_test.ts
 import { assert, assertEquals } from "jsr:@std/assert";
-import { fetchPois, searchAutocomplete } from "./places.ts";
+import { fetchPois, searchAutocomplete, fetchPlaceDetails } from "./places.ts";
 import type { Poi, Prefs } from "./types.ts";
 
 const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced" };
@@ -79,4 +79,25 @@ Deno.test("searchAutocomplete returns [] for empty suggestions", async () => {
   const httpFetch = (() => Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))) as unknown as typeof fetch;
   const out = await searchAutocomplete({ query: "zzzz", httpFetch: httpFetch as any, apiKey: "k" });
   assertEquals(out, []);
+});
+
+Deno.test("fetchPlaceDetails parses center, viewport, types", async () => {
+  let sawUrl = "", sawMask = "";
+  const httpFetch = ((url: string, init?: RequestInit) => {
+    sawUrl = url;
+    sawMask = (init?.headers as Record<string, string>)["X-Goog-FieldMask"] ?? "";
+    return Promise.resolve(new Response(JSON.stringify({
+      location: { latitude: 38.7, longitude: -9.1 },
+      viewport: { low: { latitude: 38.6, longitude: -9.2 }, high: { latitude: 38.8, longitude: -9.0 } },
+      types: ["locality", "political"],
+      displayName: { text: "Lisbon" },
+    }), { status: 200 }));
+  }) as unknown as typeof fetch;
+  const d = await fetchPlaceDetails({ placeId: "p1", httpFetch: httpFetch as any, apiKey: "k" });
+  assertEquals(d.center, { lat: 38.7, lng: -9.1 });
+  assertEquals(d.viewport, { low: { lat: 38.6, lng: -9.2 }, high: { lat: 38.8, lng: -9.0 } });
+  assertEquals(d.types, ["locality", "political"]);
+  assertEquals(d.name, "Lisbon");
+  assert(sawUrl.includes("/v1/places/p1"));
+  assert(sawMask.includes("viewport"));
 });
