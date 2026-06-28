@@ -17,8 +17,8 @@ builds on.
 accent, strong type hierarchy, pill buttons, card-based layouts. Light theme.
 
 **In scope:**
-- NativeWind + gluestack-ui v2 setup, design tokens, Plus Jakarta Sans typography.
-- A small set of reusable themed components (`components/ui/`).
+- NativeWind setup, design tokens, Plus Jakarta Sans typography.
+- A small set of reusable hand-built themed components (`components/ui/`).
 - Restyle the 4 existing screens (`index`, `onboarding`, `generating`, `itinerary`) — same
   behaviour, new look.
 
@@ -29,11 +29,11 @@ features/screens, and the "future polish" listed in §8.
 
 | Decision | Choice | Why |
 |---|---|---|
-| Styling engine | **gluestack-ui v2** on **NativeWind** (Tailwind for RN) | Prebuilt themeable components, low native footprint (copy-in source), works on SDK 56 New Arch |
+| Styling engine | **NativeWind v4** (+ Tailwind v3) only; hand-built `components/ui/` | Stable + Expo-documented for SDK 56. gluestack moved to v5 (NativeWind v5 / Tailwind v4 — bleeding-edge); our component set is small and fully custom-themed, so gluestack adds version churn for little gain |
 | Accent | **Crimson** `#E11D48` (accent-2 `#FB7185`, pressed `#BE123C`) | User choice; confident, warm, premium |
-| Typography | **Plus Jakarta Sans** via `expo-font`, weights 400/500/600/700/800 | Distinctive geometric sans matching the reference apps |
+| Typography | **Plus Jakarta Sans** via `@expo-google-fonts/plus-jakarta-sans` + `expo-font`, weights 400/500/600/700/800 | Distinctive geometric sans matching the reference apps; Google-Fonts package avoids manual `.ttf` assets |
 | Theme | **Light only** now; tokens namespaced so dark is a later drop-in | Faster; dark is future work |
-| Icons | lucide (via gluestack) / `@expo/vector-icons` | Already-available, consistent set |
+| Icons | `@expo/vector-icons` (bundled with Expo) | Already-available, consistent set, no new dep |
 
 ## 3. Design Tokens
 
@@ -58,7 +58,7 @@ mobile/
   tailwind.config.js          # tokens (colors/radius/shadow/fontFamily)
   global.css                  # NativeWind @tailwind directives
   babel.config.js / metro.config.js / nativewind-env.d.ts   # NativeWind wiring
-  app/_layout.tsx             # MODIFY: load fonts + wrap in <GluestackUIProvider>
+  app/_layout.tsx             # MODIFY: import global.css + load fonts (gate render)
   components/ui/
     Screen.tsx                # SafeArea + bg + padding wrapper
     Text.tsx                  # variant-based typography (display/title/heading/body/caption/label)
@@ -97,8 +97,8 @@ tokens. No behavioural change.
 
 ## 5. Configuration / Secrets
 
-None. New dev dependencies only (`nativewind`, `tailwindcss`, gluestack packages,
-`@expo/vector-icons`/lucide, font asset). A **new EAS dev build** is required for NativeWind's
+None. New dependencies only (`nativewind`, `tailwindcss@^3` dev, `@expo-google-fonts/plus-jakarta-sans`,
+`@expo/vector-icons` which ships with Expo). A **new EAS dev build** is required for NativeWind's
 native config to take effect on device.
 
 ## 6. Testing / Verification
@@ -122,7 +122,7 @@ cannot see the device result — final visual approval is the user's.
 |---|---|
 | Fonts not yet loaded at first paint | Gate render on `useFonts` (splash held) so text never flashes in a fallback face |
 | NativeWind class not applied (config miswired) | Caught in the web/device smoke; the plan's first task verifies a styled sample before proceeding |
-| gluestack-ui v2 install drift vs SDK 56 | Plan's setup task verifies against current gluestack docs before building components (per `mobile/AGENTS.md`) |
+| NativeWind v4 install drift vs SDK 56 | Plan's setup task verifies a styled probe renders before building components (per `mobile/AGENTS.md`) |
 | Restyle accidentally changes behaviour | Each screen restyle keeps its existing handlers/state; reviewed against the pre-restyle file |
 
 ## 8. Future Polish (deferred — planned, NOT cut)
