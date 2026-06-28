@@ -33,8 +33,23 @@ export async function fetchPois(opts: {
   httpFetch: HttpFetch;
   apiKey: string;
   cache?: PoiCache;
+  locationBias?: { center: { lat: number; lng: number }; radiusKm: number };
 }): Promise<Poi[]> {
   const { location, kind, prefs, httpFetch, apiKey, cache } = opts;
+  const body: Record<string, unknown> = {
+    textQuery: `${TYPE_QUERY[kind]} in ${location}`,
+    maxResultCount: 20,
+  };
+  if (opts.locationBias) {
+    // searchText circle radius is hard-capped at 50 km by the API
+    const radius = Math.min(opts.locationBias.radiusKm * 1000, 50000);
+    body.locationBias = {
+      circle: {
+        center: { latitude: opts.locationBias.center.lat, longitude: opts.locationBias.center.lng },
+        radius,
+      },
+    };
+  }
   const res = await httpFetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
@@ -42,7 +57,7 @@ export async function fetchPois(opts: {
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask": FIELD_MASK,
     },
-    body: JSON.stringify({ textQuery: `${TYPE_QUERY[kind]} in ${location}`, maxResultCount: 20 }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`places: HTTP ${res.status}`);
   const data = await res.json() as { places?: Array<Record<string, unknown>> };

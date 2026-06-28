@@ -81,6 +81,20 @@ Deno.test("searchAutocomplete returns [] for empty suggestions", async () => {
   assertEquals(out, []);
 });
 
+Deno.test("fetchPois sends locationBias circle capped at 50km", async () => {
+  let sentBody: any = null;
+  const httpFetch = (_url: string, init?: RequestInit) => {
+    sentBody = JSON.parse(String(init?.body));
+    return Promise.resolve(fakeResponse(placesBody));
+  };
+  await fetchPois({
+    location: "Lisbon", kind: "attraction", prefs, httpFetch, apiKey: "k",
+    locationBias: { center: { lat: 38.7, lng: -9.1 }, radiusKm: 150 },
+  });
+  assertEquals(sentBody.locationBias.circle.center, { latitude: 38.7, longitude: -9.1 });
+  assertEquals(sentBody.locationBias.circle.radius, 50000); // capped at 50000 m
+});
+
 Deno.test("fetchPlaceDetails parses center, viewport, types", async () => {
   let sawUrl = "", sawMask = "";
   const httpFetch = ((url: string, init?: RequestInit) => {
