@@ -1,11 +1,12 @@
 // mobile/app/(app)/itinerary.tsx
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, SectionList, Button, Pressable } from "react-native";
+import { View, SectionList, Pressable } from "react-native";
 import { AppleMaps } from "expo-maps";
 import { useRouter } from "expo-router";
 import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
 import { getStopCoords, type StopCoord } from "../../lib/poi";
+import { Screen, Text, Button, Card, EmptyState } from "../../components/ui";
 
 export default function Itinerary() {
   const { data } = useTripFlow();
@@ -32,11 +33,13 @@ export default function Itinerary() {
 
   if (empty) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: 12, padding: 24 }}>
-        <Text style={{ fontSize: 16, fontWeight: "600" }}>Limited data here</Text>
-        <Text style={{ color: "#888", textAlign: "center" }}>Try a broader location.</Text>
-        <Button title="Edit trip" onPress={() => router.replace("/onboarding")} />
-      </View>
+      <Screen>
+        <EmptyState
+          title="Limited data here"
+          subtitle="Try a broader location."
+          action={<Button title="Edit trip" onPress={() => router.replace("/onboarding")} />}
+        />
+      </Screen>
     );
   }
 
@@ -51,45 +54,51 @@ export default function Itinerary() {
     data: d.stops,
   }));
 
-  return (
-    <View style={{ flex: 1 }}>
-      <View style={{ flexDirection: "row", justifyContent: "center", gap: 8, padding: 12 }}>
-        <Pressable onPress={() => setView("list")}>
-          <Text style={{ fontWeight: view === "list" ? "700" : "400" }}>List</Text>
-        </Pressable>
-        <Text>·</Text>
-        <Pressable onPress={() => setView("map")}>
-          <Text style={{ fontWeight: view === "map" ? "700" : "400" }}>Map</Text>
-        </Pressable>
+  function Toggle() {
+    return (
+      <View className="flex-row self-center bg-surface-2 rounded-pill p-1 mb-3">
+        {(["list", "map"] as const).map((v) => (
+          <Pressable key={v} onPress={() => setView(v)} className={`px-5 py-1.5 rounded-pill ${view === v ? "bg-surface" : ""}`}>
+            <Text variant="label" className={view === v ? "text-accent" : "text-ink-muted"}>{v === "list" ? "List" : "Map"}</Text>
+          </Pressable>
+        ))}
       </View>
+    );
+  }
 
+  return (
+    <Screen>
+      <Toggle />
       {view === "map" ? (
-        <AppleMaps.View
-          style={{ flex: 1 }}
-          cameraPosition={markers[0] ? { coordinates: markers[0].coordinates, zoom: 11 } : undefined}
-          markers={markers}
-        />
+        <View className="flex-1 rounded-lg overflow-hidden">
+          <AppleMaps.View
+            style={{ flex: 1 }}
+            cameraPosition={markers[0] ? { coordinates: markers[0].coordinates, zoom: 11 } : undefined}
+            markers={markers}
+          />
+        </View>
       ) : (
         <SectionList
           sections={sections}
           keyExtractor={(item, i) => item.placeId + i}
+          contentContainerClassName="gap-3 pb-4"
           renderSectionHeader={({ section }) => (
-            <View style={{ backgroundColor: "#f3f4f6", padding: 12 }}>
-              <Text style={{ fontWeight: "700" }}>{section.title}</Text>
-              {section.lodging ? <Text style={{ color: "#888" }}>Stay: {section.lodging}</Text> : null}
+            <View className="pt-2 pb-1">
+              <Text variant="heading">{section.title}</Text>
+              {section.lodging ? <Text variant="caption">Stay: {section.lodging}</Text> : null}
             </View>
           )}
           renderItem={({ item }) => (
-            <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: "#eee" }}>
-              <Text style={{ fontWeight: "600" }}>{item.name}</Text>
-              <Text style={{ color: "#444" }}>{item.blurb}</Text>
+            <Card className="gap-1">
+              <Text variant="heading">{item.name}</Text>
+              <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
               {item.travelMinutesFromPrev != null ? (
-                <Text style={{ color: "#888", fontSize: 12 }}>{item.travelMinutesFromPrev} min from previous</Text>
+                <Text variant="caption">{item.travelMinutesFromPrev} min from previous</Text>
               ) : null}
-            </View>
+            </Card>
           )}
         />
       )}
-    </View>
+    </Screen>
   );
 }
