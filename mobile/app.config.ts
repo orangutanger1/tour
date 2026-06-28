@@ -43,6 +43,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         },
       },
     ],
+    "expo-maps",
   ],
   extra: {
     ...config.extra,
