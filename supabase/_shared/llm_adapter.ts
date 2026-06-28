@@ -1,10 +1,11 @@
 // supabase/_shared/llm_adapter.ts
 import type { HttpFetch, LlmComplete } from "./types.ts";
 
-// Provider-neutral adapter. The request body and response path below are a
-// generic shape; adjust both to the bench-test winner. Tests pin the contract
-// (prompt in, text out, throw on non-OK), not the provider.
-// ponytail: single-provider seam. Add a provider switch only if two run live.
+// OpenAI-compatible chat-completions adapter. Works with OpenRouter
+// (https://openrouter.ai/api/v1/chat/completions) and any OpenAI-shaped endpoint;
+// swap providers by changing LLM_ENDPOINT/LLM_MODEL/LLM_API_KEY only. Tests pin
+// the contract (prompt in, text out, throw on non-OK), not the provider.
+// ponytail: single chat shape. Add a provider switch only if a non-OpenAI API runs live.
 export function makeLlmComplete(opts: {
   httpFetch: HttpFetch;
   apiKey: string;
@@ -15,10 +16,13 @@ export function makeLlmComplete(opts: {
     const res = await opts.httpFetch(opts.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${opts.apiKey}` },
-      body: JSON.stringify({ model: opts.model, prompt }),
+      body: JSON.stringify({
+        model: opts.model,
+        messages: [{ role: "user", content: prompt }],
+      }),
     });
     if (!res.ok) throw new Error(`llm: HTTP ${res.status}`);
-    const data = await res.json() as { output?: string };
-    return data.output ?? "";
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    return data.choices?.[0]?.message?.content ?? "";
   };
 }
