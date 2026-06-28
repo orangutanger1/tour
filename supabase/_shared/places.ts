@@ -67,3 +67,27 @@ export async function fetchPois(opts: {
   if (cache) await cache.write(pois);
   return pois;
 }
+
+export async function searchAutocomplete(opts: {
+  query: string;
+  httpFetch: HttpFetch;
+  apiKey: string;
+}): Promise<string[]> {
+  const { query, httpFetch, apiKey } = opts;
+  const res = await httpFetch("https://places.googleapis.com/v1/places:autocomplete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+    },
+    body: JSON.stringify({ input: query }),
+  });
+  if (!res.ok) throw new Error(`autocomplete: HTTP ${res.status}`);
+  const data = await res.json() as {
+    suggestions?: Array<{ placePrediction?: { text?: { text?: string } } }>;
+  };
+  return (data.suggestions ?? [])
+    .map((s) => s.placePrediction?.text?.text)
+    .filter((t): t is string => typeof t === "string")
+    .slice(0, 5);
+}
