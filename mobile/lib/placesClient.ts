@@ -23,7 +23,7 @@ export async function autocompletePlaces(opts: {
   return (data.suggestions ?? []).map((s) => ({ text: s.text, placeId: s.placeId, types: s.types ?? [] }));
 }
 
-export interface Region { label: string; hook: string; }
+export interface Region { label: string; hook: string; placeId: string; }
 
 export async function suggestRegions(opts: {
   placeId: string;

@@ -1,7 +1,7 @@
 // supabase/functions/suggest-regions/index.ts
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { handleSuggestRegions } from "./handler.ts";
-import { fetchPlaceDetails } from "../../_shared/places.ts";
+import { fetchPlaceDetails, searchAutocomplete } from "../../_shared/places.ts";
 import { makeLlmComplete } from "../../_shared/llm_adapter.ts";
 import type { Region } from "../../_shared/regions.ts";
 
@@ -28,6 +28,10 @@ Deno.serve(async (req: Request) => {
     getDetails: async (placeId) => {
       const d = await fetchPlaceDetails({ placeId, httpFetch: fetch, apiKey: PLACES_KEY });
       return { viewport: d.viewport, name: d.name };
+    },
+    resolveRegion: async (query) => {
+      const hits = await searchAutocomplete({ query, httpFetch: fetch, apiKey: PLACES_KEY });
+      return hits[0] ? { placeId: hits[0].placeId, label: hits[0].text } : null;
     },
     llmComplete,
   });

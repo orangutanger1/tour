@@ -39,9 +39,9 @@ test("throws on non-2xx", async () => {
 import { suggestRegions } from "./placesClient";
 
 test("suggestRegions returns regions from the function", async () => {
-  const fetchImpl = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ regions: [{ label: "NorCal", hook: "Yosemite" }] }) });
+  const fetchImpl = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ regions: [{ label: "NorCal", hook: "Yosemite", placeId: "nc" }] }) });
   const out = await suggestRegions({ placeId: "p", baseUrl: "http://x", anonKey: "k", fetchImpl: fetchImpl as unknown as typeof fetch });
-  expect(out).toEqual([{ label: "NorCal", hook: "Yosemite" }]);
+  expect(out).toEqual([{ label: "NorCal", hook: "Yosemite", placeId: "nc" }]);
 });
 
 test("suggestRegions returns [] on error response", async () => {

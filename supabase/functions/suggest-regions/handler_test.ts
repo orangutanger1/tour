@@ -3,10 +3,11 @@ import { handleSuggestRegions } from "./handler.ts";
 import type { SuggestRegionsDeps } from "../../_shared/regions.ts";
 
 const deps: SuggestRegionsDeps = {
-  getCached: () => Promise.resolve([{ label: "NorCal", hook: "Yosemite" }]),
+  getCached: () => Promise.resolve([{ label: "NorCal", hook: "Yosemite", placeId: "nc" }]),
   putCached: () => Promise.resolve(),
   getDetails: () => Promise.resolve({ viewport: null, name: "n" }),
   llmComplete: () => Promise.resolve("{}"),
+  resolveRegion: () => Promise.resolve(null),
 };
 
 Deno.test("400 when placeId missing", async () => {
@@ -17,5 +18,5 @@ Deno.test("400 when placeId missing", async () => {
 Deno.test("200 returns regions", async () => {
   const r = await handleSuggestRegions({ placeId: "p" }, deps);
   assertEquals(r.status, 200);
-  assertEquals((r.body as { regions: unknown }).regions, [{ label: "NorCal", hook: "Yosemite" }]);
+  assertEquals((r.body as { regions: unknown }).regions, [{ label: "NorCal", hook: "Yosemite", placeId: "nc" }]);
 });

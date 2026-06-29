@@ -168,8 +168,11 @@ export default function Onboarding() {
             <View className="gap-2">
               <Text variant="label">Big place — narrow it down?</Text>
               {regions.map((r) => (
-                <Pressable key={r.label} onPress={() => {
-                  setState((s) => ({ ...s, location: r.label, destinationPlaceId: undefined }));
+                <Pressable key={r.placeId} onPress={() => {
+                  // Region carries a real placeId — set it so the destination is
+                  // geocoded (no global autocomplete on a bare label, real bias center).
+                  setState((s) => ({ ...s, location: r.label, destinationPlaceId: r.placeId }));
+                  setSuggestions([]);
                   setRegions([]);
                 }}
                   className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
