@@ -4,10 +4,10 @@ import { handleAutocomplete } from "./handler.ts";
 
 Deno.test("handleAutocomplete returns suggestion objects", async () => {
   const out = await handleAutocomplete({ query: "Lisbon" }, {
-    search: () => Promise.resolve([{ text: "Lisbon, Portugal", placeId: "p1" }]),
+    search: () => Promise.resolve([{ text: "Lisbon, Portugal", placeId: "p1", types: [] }]),
   });
   assertEquals(out.status, 200);
-  assertEquals(out.body, { suggestions: [{ text: "Lisbon, Portugal", placeId: "p1" }] });
+  assertEquals(out.body, { suggestions: [{ text: "Lisbon, Portugal", placeId: "p1", types: [] }] });
 });
 
 Deno.test("rejects short query", async () => {

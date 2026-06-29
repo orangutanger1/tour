@@ -67,6 +67,14 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
       return data.id as string;
     },
+    fetchDwell: async (placeIds) => {
+      if (placeIds.length === 0) return {};
+      const { data } = await admin.from("place_dwell").select("place_id, minutes").in("place_id", placeIds);
+      return Object.fromEntries((data ?? []).map((r: { place_id: string; minutes: number }) => [r.place_id, r.minutes]));
+    },
+    saveDwell: async (entries) => {
+      await admin.from("place_dwell").upsert(entries.map((e) => ({ place_id: e.placeId, minutes: e.minutes, updated_at: new Date().toISOString() })));
+    },
   };
 
   const result = await handleGenerate(body, userId, deps);

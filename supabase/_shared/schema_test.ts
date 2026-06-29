@@ -52,3 +52,15 @@ Deno.test("sanitizeItinerary drops unknown placeIds", () => {
   const clean = sanitizeItinerary(dirty, new Set(["A"]));
   assertEquals(clean.days[0].stops.map((s) => s.placeId), ["A"]);
 });
+
+Deno.test("sanitizeItinerary preserves dwellMinutes, kind, suggestedTime", () => {
+  const it: Itinerary = {
+    days: [{ day: 1, lodgingPlaceId: null, stops: [
+      { placeId: "A", name: "A", blurb: "x", dwellMinutes: 90, kind: "attraction" },
+      { placeId: "", name: "Lunch", blurb: "y", kind: "meal-gap", dwellMinutes: 60, suggestedTime: "12:30 PM" },
+    ] }],
+  };
+  const out = sanitizeItinerary(it, new Set(["A"]));
+  assertEquals(out.days[0].stops[0].dwellMinutes, 90);
+  assertEquals(out.days[0].stops[0].kind, "attraction");
+});

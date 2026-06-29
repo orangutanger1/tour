@@ -5,13 +5,13 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
   INTERESTS, MAX_TRIP_DAYS, stateFromProfile, stateFromRequest, canContinue, buildRequest,
-  type OnboardingState,
+  shouldOfferRegions, type OnboardingState,
 } from "../../lib/onboarding";
 import { getProfile } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { useTripFlow } from "../../lib/tripFlow";
-import { autocompletePlaces } from "../../lib/placesClient";
+import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import type { Prefs } from "../../lib/types";
 import { Screen, Text, Button, Chip, Input, Card } from "../../components/ui";
@@ -47,8 +47,11 @@ export default function Onboarding() {
   const [state, setState] = useState<OnboardingState>(
     seedRequest ? stateFromRequest(seedRequest) : stateFromProfile(null),
   );
-  const [suggestions, setSuggestions] = useState<{ text: string; placeId: string }[]>([]);
+  const [suggestions, setSuggestions] = useState<{ text: string; placeId: string; types: string[] }[]>([]);
   const debouncedLocation = useDebouncedValue(state.location, 300);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [startSuggestions, setStartSuggestions] = useState<{ text: string; placeId: string; types: string[] }[]>([]);
+  const debouncedStart = useDebouncedValue(state.startLocation ?? "", 300);
 
   useEffect(() => {
     if (seedRequest) return; // editing an existing trip — don't clobber it with profile defaults
@@ -62,6 +65,14 @@ export default function Onboarding() {
       .catch(() => { if (active) setSuggestions([]); });
     return () => { active = false; };
   }, [debouncedLocation]);
+
+  useEffect(() => {
+    let active = true;
+    autocompletePlaces({ query: debouncedStart, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey })
+      .then((s) => { if (active) setStartSuggestions(s); })
+      .catch(() => { if (active) setStartSuggestions([]); });
+    return () => { active = false; };
+  }, [debouncedStart]);
 
   function toggleInterest(i: string) {
     setState((s) => ({
@@ -134,15 +145,41 @@ export default function Onboarding() {
         <View className="gap-4">
           <Text variant="title">Where and how long?</Text>
           <Input placeholder="Location (e.g. Lisbon)" value={state.location}
-            onChangeText={(t) => setState((s) => ({ ...s, location: t, destinationPlaceId: undefined }))} autoCorrect={false} />
+            onChangeText={(t) => { setState((s) => ({ ...s, location: t, destinationPlaceId: undefined })); setRegions([]); }} autoCorrect={false} />
           {suggestions.length > 0 && state.location.trim().length >= 2 ? (
             <View className="gap-1">
               {suggestions.map((sug) => (
-                <Pressable key={sug.placeId} onPress={() => { setState((s) => ({ ...s, location: sug.text, destinationPlaceId: sug.placeId })); setSuggestions([]); }}
+                <Pressable key={sug.placeId} onPress={() => {
+                  setState((s) => ({ ...s, location: sug.text, destinationPlaceId: sug.placeId }));
+                  setSuggestions([]);
+                  setRegions([]);
+                  if (shouldOfferRegions(sug.types)) {
+                    suggestRegions({ placeId: sug.placeId, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey })
+                      .then(setRegions).catch(() => setRegions([]));
+                  }
+                }}
                   className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
                   <Text variant="body">{sug.text}</Text>
                 </Pressable>
               ))}
+            </View>
+          ) : null}
+          {regions.length > 0 ? (
+            <View className="gap-2">
+              <Text variant="label">Big place — narrow it down?</Text>
+              {regions.map((r) => (
+                <Pressable key={r.label} onPress={() => {
+                  setState((s) => ({ ...s, location: r.label, destinationPlaceId: undefined }));
+                  setRegions([]);
+                }}
+                  className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
+                  <Text variant="body">{r.label}</Text>
+                  <Text variant="caption">{r.hook}</Text>
+                </Pressable>
+              ))}
+              <Pressable onPress={() => setRegions([])} className="p-2">
+                <Text variant="caption" className="text-ink-muted">Skip — search the whole area</Text>
+              </Pressable>
             </View>
           ) : null}
           <Text variant="label">Days</Text>
@@ -158,6 +195,19 @@ export default function Onboarding() {
             <Button title="+" variant="secondary" className="w-12" disabled={state.tripDays >= MAX_TRIP_DAYS}
               onPress={() => setState((s) => ({ ...s, tripDays: Math.min(MAX_TRIP_DAYS, s.tripDays + 1) }))} />
           </View>
+          <Text variant="label">Starting point (optional)</Text>
+          <Input placeholder="Home, airport, or hotel" value={state.startLocation ?? ""}
+            onChangeText={(t) => setState((s) => ({ ...s, startLocation: t, startPlaceId: undefined }))} autoCorrect={false} />
+          {startSuggestions.length > 0 && (state.startLocation ?? "").trim().length >= 2 ? (
+            <View className="gap-1">
+              {startSuggestions.map((sug) => (
+                <Pressable key={sug.placeId} onPress={() => { setState((s) => ({ ...s, startLocation: sug.text, startPlaceId: sug.placeId })); setStartSuggestions([]); }}
+                  className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
+                  <Text variant="body">{sug.text}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
       )}
 
@@ -169,6 +219,7 @@ export default function Onboarding() {
           <Text variant="body">Interests: {state.interests.join(", ")}</Text>
           <Text variant="body">Budget: {state.budget} · Pace: {state.pace}</Text>
           <Text variant="body">Transport: {state.transport}</Text>
+          {state.startLocation ? <Text variant="body">Start: {state.startLocation}</Text> : null}
         </Card>
       )}
 

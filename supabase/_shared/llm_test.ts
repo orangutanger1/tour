@@ -39,3 +39,17 @@ Deno.test("buildPrompt encodes pace as stops/day (relaxed)", () => {
   assertStringIncludes(p, "2");
   assertStringIncludes(p, "stops per day");
 });
+
+Deno.test("prompt asks for dwellMinutes and interest prioritization", () => {
+  const p = buildPrompt([], { interests: ["scenic"], budget: "mid", pace: "balanced", transport: "balanced" }, 2);
+  assertStringIncludes(p, "dwellMinutes");
+  assertStringIncludes(p, "Prioritize");
+});
+
+Deno.test("prompt adds meal guidance only when food is selected", () => {
+  const base = { budget: "mid", pace: "balanced", transport: "balanced" } as const;
+  const withFood = buildPrompt([], { ...base, interests: ["food"] }, 2);
+  const noFood = buildPrompt([], { ...base, interests: ["scenic"] }, 2);
+  assertStringIncludes(withFood, "food stops per day");
+  assert(!noFood.includes("food stops per day"), "no-food prompt must omit meal guidance");
+});

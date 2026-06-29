@@ -69,8 +69,8 @@ Deno.test("searchAutocomplete sends includedPrimaryTypes and maps text+placeId",
   }) as unknown as typeof fetch;
   const out = await searchAutocomplete({ query: "Lis", httpFetch: httpFetch as any, apiKey: "k" });
   assertEquals(out, [
-    { text: "Lisbon, Portugal", placeId: "p1" },
-    { text: "Lisbon, OH, USA", placeId: "p2" },
+    { text: "Lisbon, Portugal", placeId: "p1", types: [] },
+    { text: "Lisbon, OH, USA", placeId: "p2", types: [] },
   ]);
   assertEquals(sentBody.includedPrimaryTypes, ["locality", "administrative_area_level_1", "country", "tourist_attraction"]);
 });
@@ -114,4 +114,12 @@ Deno.test("fetchPlaceDetails parses center, viewport, types", async () => {
   assertEquals(d.name, "Lisbon");
   assert(sawUrl.includes("/v1/places/p1"));
   assert(sawMask.includes("viewport"));
+});
+
+Deno.test("searchAutocomplete surfaces prediction types", async () => {
+  const httpFetch = ((_url: string, _init?: RequestInit) => Promise.resolve(new Response(JSON.stringify({
+    suggestions: [{ placePrediction: { placeId: "c1", text: { text: "China" }, types: ["country"] } }],
+  })))) as unknown as typeof fetch;
+  const out = await searchAutocomplete({ query: "china", httpFetch, apiKey: "k" });
+  assertEquals(out[0].types, ["country"]);
 });

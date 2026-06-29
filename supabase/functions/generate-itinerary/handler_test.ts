@@ -17,6 +17,8 @@ function baseDeps(over: Partial<HandlerDeps> = {}): HandlerDeps {
     curate: () => Promise.resolve(itinerary),
     orderStops: ({ stops }) => Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 7 })), polyline: undefined }),
     saveTrip: () => Promise.resolve("trip-123"),
+    fetchDwell: () => Promise.resolve({}),
+    saveDwell: () => Promise.resolve(),
     ...over,
   };
 }
@@ -135,4 +137,82 @@ Deno.test("real center + no lodging: orderStops IS called (city-center anchor)",
   assertEquals(out.status, 200);
   assertEquals(orderStopsCalled, true, "orderStops should be called when center is non-zero even without lodging");
   assertEquals(out.body.itinerary.days[0].routePolyline, "poly2");
+});
+
+Deno.test("does not fetch food unless 'food' interest selected", async () => {
+  const kinds: string[] = [];
+  const deps = baseDeps({ fetchPois: ({ kind }) => { kinds.push(kind); return Promise.resolve(kind === "lodging" ? lodging : attractions); } });
+  await handleGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
+  assert(!kinds.includes("food"), `food fetched: ${kinds.join(",")}`);
+});
+
+Deno.test("fetches food when 'food' interest selected", async () => {
+  const kinds: string[] = [];
+  const deps = baseDeps({ fetchPois: ({ kind }) => { kinds.push(kind); return Promise.resolve(kind === "lodging" ? lodging : attractions); } });
+  await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", deps);
+  assert(kinds.includes("food"), `food not fetched: ${kinds.join(",")}`);
+});
+
+Deno.test("prefers cached dwell and saves newly-seen estimates", async () => {
+  const saved: { placeId: string; minutes: number }[] = [];
+  const curated: Itinerary = { days: [{ day: 1, lodgingPlaceId: null, stops: [
+    { placeId: "A", name: "A", blurb: "x", dwellMinutes: 30 },
+    { placeId: "B", name: "B", blurb: "x", dwellMinutes: 45 },
+  ] }] };
+  const deps = baseDeps({
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : [
+      { placeId: "A", name: "A", kind: "attraction", lat: 0, lng: 0 },
+      { placeId: "B", name: "B", kind: "attraction", lat: 0, lng: 0 },
+    ]),
+    curate: () => Promise.resolve(curated),
+    orderStops: ({ stops }) => Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 0 })), polyline: undefined }),
+    fetchDwell: () => Promise.resolve({ A: 99 }),         // A cached, B not
+    saveDwell: (e) => { saved.push(...e); return Promise.resolve(); },
+  });
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
+  const days = (r.body as { itinerary: Itinerary }).itinerary.days;
+  const byId = Object.fromEntries(days[0].stops.map((s) => [s.placeId, s]));
+  assertEquals(byId["A"].dwellMinutes, 99);              // cache wins
+  assertEquals(byId["B"].dwellMinutes, 45);              // llm value kept
+  assertEquals(saved, [{ placeId: "B", minutes: 45 }]);  // only the new one saved
+});
+
+Deno.test("inserts lunch + dinner meal gaps when food not selected", async () => {
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs }, "u1", baseDeps());
+  const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
+  const gaps = stops.filter((s) => s.kind === "meal-gap");
+  assertEquals(gaps.length, 2);
+  assert(gaps.every((g) => g.placeId === "" && g.dwellMinutes === 60 && !!g.suggestedTime));
+});
+
+Deno.test("no meal gaps when food selected", async () => {
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", baseDeps());
+  const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
+  assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 0);
+});
+
+Deno.test("day 1 and last day anchor on the start location", async () => {
+  const threeDay: Itinerary = { days: [
+    { day: 1, lodgingPlaceId: null, stops: [{ placeId: "A1", name: "A1", blurb: "x" }] },
+    { day: 2, lodgingPlaceId: null, stops: [{ placeId: "A2", name: "A2", blurb: "x" }] },
+    { day: 3, lodgingPlaceId: null, stops: [{ placeId: "A3", name: "A3", blurb: "x" }] },
+  ] };
+  const anchors: { lat: number; lng: number }[] = [];
+  const deps = baseDeps({
+    resolveDestination: ({ placeId }) => Promise.resolve(
+      placeId === "START" ? { center: { lat: 5, lng: 5 }, viewport: null } : { center: { lat: 1, lng: 1 }, viewport: null }),
+    fetchPois: ({ kind }) => Promise.resolve(
+      kind === "lodging" ? lodging : [
+        { placeId: "A1", name: "A1", kind: "attraction", lat: 0, lng: 0 },
+        { placeId: "A2", name: "A2", kind: "attraction", lat: 0, lng: 0 },
+        { placeId: "A3", name: "A3", kind: "attraction", lat: 0, lng: 0 },
+      ]),
+    curate: () => Promise.resolve(threeDay),
+    orderStops: ({ stops, anchor }) => { anchors.push(anchor); return Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 0 })), polyline: undefined }); },
+  });
+  await handleGenerate({ location: "X", tripDays: 3, destinationPlaceId: "DEST", startPlaceId: "START", prefs }, "u1", deps);
+  assertEquals(anchors.length, 3);
+  assertEquals(anchors[0], { lat: 5, lng: 5 }); // day 1 -> start
+  assertEquals(anchors[2], { lat: 5, lng: 5 }); // last day -> start
+  assertEquals(anchors[1], { lat: 9, lng: 9 }); // middle day -> lodging
 });
