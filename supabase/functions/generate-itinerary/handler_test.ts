@@ -191,6 +191,39 @@ Deno.test("no meal gaps when food selected", async () => {
   assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 0);
 });
 
+Deno.test("food fetch failure does not abort generation (no 546)", async () => {
+  const deps = baseDeps({
+    fetchPois: ({ kind }) => {
+      if (kind === "food") return Promise.reject(new Error("places: HTTP 500"));
+      return Promise.resolve(kind === "lodging" ? lodging : attractions);
+    },
+  });
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", deps);
+  assertEquals(r.status, 200);
+});
+
+Deno.test("lodging fetch failure does not abort generation (no 546)", async () => {
+  const deps = baseDeps({
+    fetchPois: ({ kind }) => {
+      if (kind === "lodging") return Promise.reject(new Error("places: HTTP 429"));
+      return Promise.resolve(attractions);
+    },
+  });
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
+  assertEquals(r.status, 200);
+});
+
+Deno.test("start-location resolve failure does not abort generation (no 546)", async () => {
+  const deps = baseDeps({
+    resolveDestination: ({ placeId }) =>
+      placeId === "START"
+        ? Promise.reject(new Error("place details: HTTP 404"))
+        : Promise.resolve({ center: { lat: 1, lng: 1 }, viewport: null }),
+  });
+  const r = await handleGenerate({ location: "X", tripDays: 1, destinationPlaceId: "DEST", startPlaceId: "START", prefs }, "u1", deps);
+  assertEquals(r.status, 200);
+});
+
 Deno.test("day 1 and last day anchor on the start location", async () => {
   const threeDay: Itinerary = { days: [
     { day: 1, lodgingPlaceId: null, stops: [{ placeId: "A1", name: "A1", blurb: "x" }] },

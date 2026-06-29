@@ -77,9 +77,20 @@ Deno.serve(async (req: Request) => {
     },
   };
 
-  const result = await handleGenerate(body, userId, deps);
-  return new Response(JSON.stringify(result.body), {
-    status: result.status,
-    headers: { "Content-Type": "application/json" },
-  });
+  // Any unhandled throw here bubbles to the Edge runtime as an opaque 546.
+  // Catch it, log the real cause, and return a readable 500 so the client can
+  // surface something better than "request failed (546)".
+  try {
+    const result = await handleGenerate(body, userId, deps);
+    return new Response(JSON.stringify(result.body), {
+      status: result.status,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("generate-itinerary failed:", e instanceof Error ? e.stack ?? e.message : e);
+    return new Response(JSON.stringify({ error: "itinerary generation failed" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 });

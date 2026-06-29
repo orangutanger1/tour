@@ -45,16 +45,21 @@ export async function handleGenerate(
   const travelMode = body.prefs.transport === "compact" ? "WALK" as const : "DRIVE" as const;
 
   const wantsFood = body.prefs.interests.includes("food");
+  // Food and lodging are enrichments, not the trip itself — a flaky Places call
+  // for either should degrade (empty list) rather than crash the whole request
+  // into the runtime's 546. Only attractions are essential; if they fail the
+  // request throws and the index wrapper turns it into a readable 500.
   const [attractions, food, lodging] = await Promise.all([
     deps.fetchPois({ location: body.location, kind: "attraction", prefs: body.prefs, locationBias }),
     wantsFood
-      ? deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias })
+      ? deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias }).catch(() => [] as Poi[])
       : Promise.resolve([] as Poi[]),
-    deps.fetchPois({ location: body.location, kind: "lodging", prefs: body.prefs, locationBias }),
+    deps.fetchPois({ location: body.location, kind: "lodging", prefs: body.prefs, locationBias }).catch(() => [] as Poi[]),
   ]);
 
+  // Start location is optional; a bad placeId shouldn't sink the trip.
   const start = (body.startPlaceId || body.startLocation)
-    ? await deps.resolveDestination({ placeId: body.startPlaceId, location: body.startLocation ?? "" })
+    ? await deps.resolveDestination({ placeId: body.startPlaceId, location: body.startLocation ?? "" }).catch(() => null)
     : null;
   const startCenter = start && (start.center.lat !== 0 || start.center.lng !== 0) ? start.center : null;
 
