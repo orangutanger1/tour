@@ -13,6 +13,8 @@ export interface OnboardingState {
   location: string;
   tripDays: number;
   destinationPlaceId?: string;
+  startLocation?: string;
+  startPlaceId?: string;
 }
 
 export function stateFromProfile(prefs: Prefs | null): OnboardingState {
@@ -24,6 +26,8 @@ export function stateFromProfile(prefs: Prefs | null): OnboardingState {
     location: "",
     tripDays: 3,
     destinationPlaceId: undefined,
+    startLocation: undefined,
+    startPlaceId: undefined,
   };
 }
 
@@ -38,6 +42,8 @@ export function stateFromRequest(req: GenerateRequest): OnboardingState {
     location: req.location,
     tripDays: req.tripDays,
     destinationPlaceId: req.destinationPlaceId,
+    startLocation: req.startLocation,
+    startPlaceId: req.startPlaceId,
   };
 }
 
@@ -52,5 +58,17 @@ export function prefsFromState(s: OnboardingState): Prefs {
 }
 
 export function buildRequest(s: OnboardingState): GenerateRequest {
-  return { location: s.location.trim(), tripDays: s.tripDays, prefs: prefsFromState(s), destinationPlaceId: s.destinationPlaceId };
+  return {
+    location: s.location.trim(),
+    tripDays: s.tripDays,
+    prefs: prefsFromState(s),
+    destinationPlaceId: s.destinationPlaceId,
+    startLocation: s.startLocation?.trim() || undefined,
+    startPlaceId: s.startPlaceId,
+  };
+}
+
+const REGION_TYPES = new Set(["country", "administrative_area_level_1"]);
+export function shouldOfferRegions(types: string[]): boolean {
+  return types.some((t) => REGION_TYPES.has(t));
 }

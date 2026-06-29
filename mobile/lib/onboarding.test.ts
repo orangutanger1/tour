@@ -75,3 +75,22 @@ test("defaults transport to balanced and round-trips it", () => {
   const s = { ...stateFromProfile(null), transport: "compact" as const };
   expect(prefsFromState(s).transport).toBe("compact");
 });
+
+import { shouldOfferRegions } from "./onboarding";
+
+test("shouldOfferRegions true for country / state", () => {
+  expect(shouldOfferRegions(["country"])).toBe(true);
+  expect(shouldOfferRegions(["administrative_area_level_1"])).toBe(true);
+});
+
+test("shouldOfferRegions false for city / poi", () => {
+  expect(shouldOfferRegions(["locality"])).toBe(false);
+  expect(shouldOfferRegions([])).toBe(false);
+});
+
+test("buildRequest carries start location", () => {
+  const s = { interests: ["scenic"], budget: "mid", pace: "balanced", transport: "balanced", location: "Lisbon", tripDays: 3, startLocation: "  SFO  ", startPlaceId: "sp1" } as const;
+  const req = buildRequest(s as unknown as Parameters<typeof buildRequest>[0]);
+  expect(req.startLocation).toBe("SFO");
+  expect(req.startPlaceId).toBe("sp1");
+});
