@@ -2,6 +2,7 @@
 import type { Itinerary, Poi, Prefs } from "../../_shared/types.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import { areaRadiusKm, type Viewport } from "../../_shared/area.ts";
+import { sunsetLocalMinutes, formatClock } from "../../_shared/solar.ts";
 
 export const DAILY_CAP = 10;
 
@@ -21,6 +22,8 @@ export interface HandlerDeps {
   curate(opts: { pois: Poi[]; prefs: Prefs; tripDays: number }): Promise<Itinerary>;
   orderStops(opts: { stops: Poi[]; anchor: { lat: number; lng: number }; travelMode?: "WALK" | "DRIVE" }): Promise<{ ordered: { placeId: string; travelMinutesFromPrev: number }[]; polyline?: string }>;
   saveTrip(opts: { userId: string; req: GenerateRequest; itinerary: Itinerary }): Promise<string>;
+  fetchDwell(placeIds: string[]): Promise<Record<string, number>>;
+  saveDwell(entries: { placeId: string; minutes: number }[]): Promise<void>;
 }
 
 export async function handleGenerate(
@@ -91,6 +94,37 @@ export async function handleGenerate(
     });
     day.routePolyline = polyline;
   }));
+
+  // Per-place dwell: prefer the cached value (deterministic across regens),
+  // persist any newly-seen LLM estimate so the dataset grows over time.
+  const stopIds = itinerary.days.flatMap((d) => d.stops.map((s) => s.placeId)).filter((id) => id);
+  const cachedDwell = await deps.fetchDwell(stopIds);
+  const newDwell: { placeId: string; minutes: number }[] = [];
+  for (const day of itinerary.days) {
+    for (const s of day.stops) {
+      if (!s.placeId) continue;
+      const cached = cachedDwell[s.placeId];
+      if (cached != null) s.dwellMinutes = cached;
+      else if (s.dwellMinutes != null) newDwell.push({ placeId: s.placeId, minutes: s.dwellMinutes });
+    }
+  }
+  if (newDwell.length) await deps.saveDwell(newDwell);
+
+  // Food not selected: reserve time for free-range meals. Lunch mid-day, dinner
+  // at local sunset. Pseudo-stops have no placeId, so they never route or map.
+  if (!wantsFood) {
+    const sunLat = anchorPoi?.lat ?? dest.center.lat;
+    const sunLng = anchorPoi?.lng ?? dest.center.lng;
+    itinerary.days.forEach((day, i) => {
+      const date = new Date();
+      date.setUTCDate(date.getUTCDate() + i);
+      const sunsetMin = (anchorPoi || hasCenter) ? sunsetLocalMinutes(sunLat, sunLng, date) : 19 * 60;
+      const lunch = { placeId: "", name: "Lunch — your pick", blurb: "Free time to grab a local bite.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: "12:30 PM" };
+      const dinner = { placeId: "", name: "Dinner — your pick", blurb: "Free time for dinner near sunset.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: formatClock(sunsetMin) };
+      const mid = Math.ceil(day.stops.length / 2);
+      day.stops = [...day.stops.slice(0, mid), lunch, ...day.stops.slice(mid), dinner];
+    });
+  }
 
   const tripId = await deps.saveTrip({ userId, req: body, itinerary });
   return { status: 200, body: { tripId, itinerary } };
