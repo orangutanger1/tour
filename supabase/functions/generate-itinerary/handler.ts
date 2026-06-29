@@ -41,11 +41,19 @@ export async function handleGenerate(
   const locationBias = hasCenter ? { center: dest.center, radiusKm } : undefined;
   const travelMode = body.prefs.transport === "compact" ? "WALK" as const : "DRIVE" as const;
 
+  const wantsFood = body.prefs.interests.includes("food");
   const [attractions, food, lodging] = await Promise.all([
     deps.fetchPois({ location: body.location, kind: "attraction", prefs: body.prefs, locationBias }),
-    deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias }),
+    wantsFood
+      ? deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias })
+      : Promise.resolve([] as Poi[]),
     deps.fetchPois({ location: body.location, kind: "lodging", prefs: body.prefs, locationBias }),
   ]);
+
+  const start = (body.startPlaceId || body.startLocation)
+    ? await deps.resolveDestination({ placeId: body.startPlaceId, location: body.startLocation ?? "" })
+    : null;
+  const startCenter = start && (start.center.lat !== 0 || start.center.lng !== 0) ? start.center : null;
 
   const pois = [...attractions, ...food];
   const anchorPoi = lodging[0] ?? null;
@@ -62,15 +70,17 @@ export async function handleGenerate(
   // Route days in parallel — each day mutates only its own object, so a serial
   // loop just stacks N route round-trips and pushes the request past the gateway
   // timeout (504). Promise.all collapses that to a single round-trip's latency.
+  const lastDay = itinerary.days.length;
   await Promise.all(itinerary.days.map(async (day) => {
     day.lodgingPlaceId = anchorPoi?.placeId ?? null;
-    // Only route when there is a real anchor: a lodging POI or a resolved center (non-{0,0}).
-    // Without a real anchor, routing would use {0,0} (null island) producing garbage results.
-    if (!anchorPoi && !hasCenter) {
+    // Day 1 and the final day anchor on the traveler's start location when set,
+    // so the route begins/returns at home/airport instead of a random point.
+    const startAnchor = startCenter && (day.day === 1 || day.day === lastDay) ? startCenter : null;
+    if (!startAnchor && !anchorPoi && !hasCenter) {
       day.routePolyline = undefined;
       return;
     }
-    const anchor = anchorPoi ? { lat: anchorPoi.lat, lng: anchorPoi.lng } : dest.center;
+    const anchor = startAnchor ?? (anchorPoi ? { lat: anchorPoi.lat, lng: anchorPoi.lng } : dest.center);
     const dayPois = day.stops.map((s) => byId.get(s.placeId)).filter((p): p is Poi => !!p);
     const { ordered, polyline } = await deps.orderStops({ stops: dayPois, anchor, travelMode });
     const minutesById = new Map(ordered.map((o) => [o.placeId, o.travelMinutesFromPrev]));
