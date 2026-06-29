@@ -185,10 +185,28 @@ Deno.test("inserts lunch + dinner meal gaps when food not selected", async () =>
   assert(gaps.every((g) => g.placeId === "" && g.dwellMinutes === 60 && !!g.suggestedTime));
 });
 
-Deno.test("no meal gaps when food selected", async () => {
-  const r = await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", baseDeps());
+Deno.test("no meal gaps when the day already has a meal stop", async () => {
+  const withMeal: Itinerary = { days: [{ day: 1, lodgingPlaceId: null, stops: [
+    { placeId: "A", name: "A", blurb: "x", kind: "attraction" },
+    { placeId: "F", name: "Cafe", blurb: "lunch", kind: "meal" },
+  ] }] };
+  const deps = baseDeps({
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : [
+      { placeId: "A", name: "A", kind: "attraction", lat: 0, lng: 0 },
+      { placeId: "F", name: "Cafe", kind: "food", lat: 0, lng: 0 },
+    ]),
+    curate: () => Promise.resolve(withMeal),
+  });
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", deps);
   const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
   assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 0);
+});
+
+Deno.test("injects meal gaps even when food selected if the day has no meal stop", async () => {
+  // Sparse region: food interest on, but the LLM picked no food places.
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", baseDeps());
+  const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
+  assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 2);
 });
 
 Deno.test("food fetch failure does not abort generation (no 546)", async () => {

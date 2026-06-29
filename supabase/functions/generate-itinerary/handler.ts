@@ -115,21 +115,23 @@ export async function handleGenerate(
   }
   if (newDwell.length) await deps.saveDwell(newDwell);
 
-  // Food not selected: reserve time for free-range meals. Lunch mid-day, dinner
-  // at local sunset. Pseudo-stops have no placeId, so they never route or map.
-  if (!wantsFood) {
-    const sunLat = anchorPoi?.lat ?? dest.center.lat;
-    const sunLng = anchorPoi?.lng ?? dest.center.lng;
-    itinerary.days.forEach((day, i) => {
-      const date = new Date();
-      date.setUTCDate(date.getUTCDate() + i);
-      const sunsetMin = (anchorPoi || hasCenter) ? sunsetLocalMinutes(sunLat, sunLng, date) : 19 * 60;
-      const lunch = { placeId: "", name: "Lunch — your pick", blurb: "Free time to grab a local bite.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: "12:30 PM" };
-      const dinner = { placeId: "", name: "Dinner — your pick", blurb: "Free time for dinner near sunset.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: formatClock(sunsetMin) };
-      const mid = Math.ceil(day.stops.length / 2);
-      day.stops = [...day.stops.slice(0, mid), lunch, ...day.stops.slice(mid), dinner];
-    });
-  }
+  // Every day should show food time. Days the LLM already filled with a meal
+  // stop (food interest) are left alone; any day without one — whether food was
+  // off, or food was on but no good food place was found — gets reserved meal
+  // slots: lunch mid-day, dinner at local sunset. Pseudo-stops have no placeId,
+  // so they never route or map.
+  const sunLat = anchorPoi?.lat ?? dest.center.lat;
+  const sunLng = anchorPoi?.lng ?? dest.center.lng;
+  itinerary.days.forEach((day, i) => {
+    if (day.stops.some((s) => s.kind === "meal")) return;
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() + i);
+    const sunsetMin = (anchorPoi || hasCenter) ? sunsetLocalMinutes(sunLat, sunLng, date) : 19 * 60;
+    const lunch = { placeId: "", name: "Lunch — your pick", blurb: "Free time to grab a local bite.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: "12:30 PM" };
+    const dinner = { placeId: "", name: "Dinner — your pick", blurb: "Free time for dinner near sunset.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: formatClock(sunsetMin) };
+    const mid = Math.ceil(day.stops.length / 2);
+    day.stops = [...day.stops.slice(0, mid), lunch, ...day.stops.slice(mid), dinner];
+  });
 
   const tripId = await deps.saveTrip({ userId, req: body, itinerary });
   return { status: 200, body: { tripId, itinerary } };
