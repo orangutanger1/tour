@@ -105,6 +105,33 @@ Deno.test("fetchPois sends locationBias circle capped at 50km", async () => {
   assertEquals(sentBody.locationBias.circle.radius, 50000); // capped at 50000 m
 });
 
+Deno.test("fetchPois drops places outside the region radius (hard filter, not just soft bias)", async () => {
+  const body = {
+    places: [
+      { id: "near", displayName: { text: "In region" }, location: { latitude: 1.03, longitude: 2.03 } },
+      { id: "far", displayName: { text: "Wrong region" }, location: { latitude: 40, longitude: -70 } },
+    ],
+  };
+  const httpFetch = () => Promise.resolve(fakeResponse(body));
+  const ids = (await fetchPois({
+    location: "Somewhere", kind: "food", prefs, httpFetch, apiKey: "k",
+    locationBias: { center: { lat: 1, lng: 2 }, radiusKm: 10 },
+  })).map((p) => p.placeId);
+  assertEquals(ids, ["near"]);
+});
+
+Deno.test("fetchPois keeps all places when no locationBias (no center to filter against)", async () => {
+  const body = {
+    places: [
+      { id: "a", displayName: { text: "A" }, location: { latitude: 1, longitude: 2 } },
+      { id: "b", displayName: { text: "B" }, location: { latitude: 40, longitude: -70 } },
+    ],
+  };
+  const httpFetch = () => Promise.resolve(fakeResponse(body));
+  const ids = (await fetchPois({ location: "X", kind: "food", prefs, httpFetch, apiKey: "k" })).map((p) => p.placeId);
+  assertEquals(ids.sort(), ["a", "b"]);
+});
+
 Deno.test("fetchPlaceDetails parses center, viewport, types", async () => {
   let sawUrl = "", sawMask = "";
   const httpFetch = ((url: string, init?: RequestInit) => {

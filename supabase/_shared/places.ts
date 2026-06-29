@@ -1,5 +1,6 @@
 // supabase/_shared/places.ts
 import type { HttpFetch, Poi, Prefs } from "./types.ts";
+import { haversineKm } from "./area.ts";
 
 export interface PoiCache {
   write(pois: Poi[]): Promise<void>;
@@ -81,8 +82,18 @@ export async function fetchPois(opts: {
     })
     .filter((p) => p.priceLevel === undefined || p.priceLevel <= cap);
 
-  if (cache) await cache.write(pois);
-  return pois;
+  // The API's locationBias is a soft hint, so searchText still returns far-off
+  // places that merely name-match the query (e.g. a "Taipei & Tokyo" eatery in
+  // New Hampshire for a Taipei trip). Hard-drop anything outside the region's
+  // real radius — independent of the 50km circle cap above, which only sizes the
+  // bias, not the region. No center → nothing to measure against, keep all.
+  const bias = opts.locationBias;
+  const inRegion = bias
+    ? pois.filter((p) => haversineKm(bias.center, { lat: p.lat, lng: p.lng }) <= bias.radiusKm)
+    : pois;
+
+  if (cache) await cache.write(inRegion);
+  return inRegion;
 }
 
 export async function searchAutocomplete(opts: {
