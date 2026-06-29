@@ -58,14 +58,14 @@ test("decodes the canonical Google polyline", () => {
 
 import { formatDwell } from "./poi";
 
-test("numberStops numbers real stops, skips meal-gaps", () => {
+test("numberStops numbers real attractions, skips meals and meal-gaps", () => {
   const out = numberStops([
     { placeId: "A", kind: "attraction" },
     { placeId: "", kind: "meal-gap" },
+    { placeId: "F1", kind: "meal" },
     { placeId: "B", kind: "attraction" },
-    { placeId: "", kind: "meal-gap" },
   ]);
-  expect(out.map((s) => s.num)).toEqual([1, null, 2, null]);
+  expect(out.map((s) => s.num)).toEqual([1, null, null, 2]);
 });
 
 test("formatDwell formats hours and minutes", () => {
