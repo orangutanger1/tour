@@ -177,36 +177,59 @@ Deno.test("prefers cached dwell and saves newly-seen estimates", async () => {
   assertEquals(saved, [{ placeId: "B", minutes: 45 }]);  // only the new one saved
 });
 
-Deno.test("inserts lunch + dinner meal gaps when food not selected", async () => {
+Deno.test("food off: each day gets lunch + dinner gaps with absolute times", async () => {
   const r = await handleGenerate({ location: "X", tripDays: 1, prefs }, "u1", baseDeps());
   const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
   const gaps = stops.filter((s) => s.kind === "meal-gap");
   assertEquals(gaps.length, 2);
-  assert(gaps.every((g) => g.placeId === "" && g.dwellMinutes === 60 && !!g.suggestedTime));
+  assert(gaps.every((g) => g.placeId === "" && g.dwellMinutes === 60 && !!g.startTime && !!g.mealSlot));
+  assertEquals(gaps.map((g) => g.mealSlot).sort(), ["dinner", "lunch"]);
 });
 
-Deno.test("no meal gaps when the day already has a meal stop", async () => {
-  const withMeal: Itinerary = { days: [{ day: 1, lodgingPlaceId: null, stops: [
-    { placeId: "A", name: "A", blurb: "x", kind: "attraction" },
-    { placeId: "F", name: "Cafe", blurb: "lunch", kind: "meal" },
-  ] }] };
+Deno.test("every stop gets an absolute startTime", async () => {
+  const r = await handleGenerate({ location: "X", tripDays: 1, prefs }, "u1", baseDeps());
+  const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
+  assert(stops.every((s) => typeof s.startTime === "string" && s.startTime.length > 0));
+  assertEquals(stops[0].startTime, "9:00 AM");
+});
+
+Deno.test("food on: meal slots are real restaurants (highest-rated first), deduped, not counted as attractions", async () => {
+  const foodPois: Poi[] = [
+    { placeId: "F1", name: "Joe", kind: "food", lat: 0, lng: 0, rating: 4.8 },
+    { placeId: "F2", name: "Mae", kind: "food", lat: 0, lng: 0, rating: 4.5 },
+  ];
   const deps = baseDeps({
-    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : [
-      { placeId: "A", name: "A", kind: "attraction", lat: 0, lng: 0 },
-      { placeId: "F", name: "Cafe", kind: "food", lat: 0, lng: 0 },
-    ]),
-    curate: () => Promise.resolve(withMeal),
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : kind === "food" ? foodPois : attractions),
+  });
+  const r = await handleGenerate({ location: "X", tripDays: 1, destinationPlaceId: "D", prefs: { ...prefs, interests: ["food"] } }, "u1", deps);
+  const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
+  const meals = stops.filter((s) => s.kind === "meal");
+  assertEquals(meals.length, 2);
+  assert(meals.every((m) => m.placeId !== "" && !!m.mealSlot && !!m.startTime));
+  assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 0);
+  assertEquals(meals.find((m) => m.mealSlot === "lunch")!.placeId, "F1"); // highest rated first
+  // deduped: the two meals are different places
+  assert(meals[0].placeId !== meals[1].placeId);
+});
+
+Deno.test("food on but no food places found: falls back to gaps", async () => {
+  const deps = baseDeps({
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : kind === "food" ? [] : attractions),
   });
   const r = await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", deps);
   const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
-  assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 0);
+  assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 2);
 });
 
-Deno.test("injects meal gaps even when food selected if the day has no meal stop", async () => {
-  // Sparse region: food interest on, but the LLM picked no food places.
-  const r = await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", baseDeps());
-  const stops = (r.body as { itinerary: Itinerary }).itinerary.days[0].stops;
-  assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 2);
+Deno.test("food POIs are never sent to the curation pool", async () => {
+  let curatedKinds: string[] = [];
+  const foodPois: Poi[] = [{ placeId: "F1", name: "Joe", kind: "food", lat: 0, lng: 0, rating: 4.8 }];
+  const deps = baseDeps({
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : kind === "food" ? foodPois : attractions),
+    curate: ({ pois }) => { curatedKinds = pois.map((p) => p.kind); return Promise.resolve(itinerary); },
+  });
+  await handleGenerate({ location: "X", tripDays: 1, prefs: { ...prefs, interests: ["food"] } }, "u1", deps);
+  assert(!curatedKinds.includes("food"), `curation pool leaked food: ${curatedKinds.join(",")}`);
 });
 
 Deno.test("re-clusters curated stops into geographically compact days", async () => {

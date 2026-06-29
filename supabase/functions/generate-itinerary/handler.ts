@@ -1,9 +1,10 @@
 // supabase/functions/generate-itinerary/handler.ts
-import type { Itinerary, Poi, Prefs } from "../../_shared/types.ts";
+import type { Itinerary, Poi, Prefs, Stop } from "../../_shared/types.ts";
 import { CurationError } from "../../_shared/curate.ts";
-import { areaRadiusKm, type Viewport } from "../../_shared/area.ts";
+import { areaRadiusKm, haversineKm, type Viewport } from "../../_shared/area.ts";
 import { assignDays } from "../../_shared/cluster.ts";
-import { sunsetLocalMinutes, formatClock } from "../../_shared/solar.ts";
+import { sunsetLocalMinutes } from "../../_shared/solar.ts";
+import { buildDaySchedule } from "../../_shared/schedule.ts";
 
 export const DAILY_CAP = 10;
 
@@ -73,7 +74,9 @@ export async function handleGenerate(
     : null;
   const startCenter = start && (start.center.lat !== 0 || start.center.lng !== 0) ? start.center : null;
 
-  const pois = [...attractions, ...food];
+  // Food is no longer curated by the LLM. Attractions alone form the pool, so the
+  // pace stop budget applies to attractions only; food fills meal slots below.
+  const pois = attractions;
   const anchorPoi = lodging[0] ?? null;
 
   let itinerary: Itinerary;
@@ -142,22 +145,46 @@ export async function handleGenerate(
   }
   if (newDwell.length) await deps.saveDwell(newDwell);
 
-  // Every day should show food time. Days the LLM already filled with a meal
-  // stop (food interest) are left alone; any day without one — whether food was
-  // off, or food was on but no good food place was found — gets reserved meal
-  // slots: lunch mid-day, dinner at local sunset. Pseudo-stops have no placeId,
-  // so they never route or map.
+  // Meals are deterministic add-ons, layered on after routing so they never
+  // affect the attraction order/polyline or the pace stop budget. Food on →
+  // each slot gets the nearest-highest-rated restaurant (deduped across days);
+  // food off, or none left → a free-range gap. buildDaySchedule then lays the
+  // absolute clock over the day and slots the meals at lunch/sunset.
+  // `wantsFood` is already declared above (gates the food fetch); reuse it.
+  const usedFood = new Set<string>();
+  const pickFood = (centroid: { lat: number; lng: number }): Stop | null => {
+    let best: Poi | null = null;
+    let bestScore = -Infinity;
+    for (const f of food) {
+      if (usedFood.has(f.placeId)) continue;
+      const score = (f.rating ?? 0) - haversineKm(centroid, { lat: f.lat, lng: f.lng }) * 0.05;
+      if (score > bestScore) { bestScore = score; best = f; }
+    }
+    if (!best) return null;
+    usedFood.add(best.placeId);
+    return { placeId: best.placeId, name: best.name, blurb: "A local spot for a meal.", kind: "meal", dwellMinutes: 60 };
+  };
+  const gap = (slot: "lunch" | "dinner"): Stop => ({
+    placeId: "",
+    name: slot === "lunch" ? "Lunch — your pick" : "Dinner — your pick",
+    blurb: slot === "lunch" ? "Free time to grab a local bite." : "Free time for dinner near sunset.",
+    kind: "meal-gap",
+    dwellMinutes: 60,
+  });
+
   const sunLat = anchorPoi?.lat ?? dest.center.lat;
   const sunLng = anchorPoi?.lng ?? dest.center.lng;
   itinerary.days.forEach((day, i) => {
-    if (day.stops.some((s) => s.kind === "meal")) return;
     const date = new Date();
     date.setUTCDate(date.getUTCDate() + i);
     const sunsetMin = (anchorPoi || hasCenter) ? sunsetLocalMinutes(sunLat, sunLng, date) : 19 * 60;
-    const lunch = { placeId: "", name: "Lunch — your pick", blurb: "Free time to grab a local bite.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: "12:30 PM" };
-    const dinner = { placeId: "", name: "Dinner — your pick", blurb: "Free time for dinner near sunset.", kind: "meal-gap" as const, dwellMinutes: 60, suggestedTime: formatClock(sunsetMin) };
-    const mid = Math.ceil(day.stops.length / 2);
-    day.stops = [...day.stops.slice(0, mid), lunch, ...day.stops.slice(mid), dinner];
+    const pts = day.stops.map((s) => byId.get(s.placeId)).filter((p): p is Poi => !!p);
+    const centroid = pts.length
+      ? { lat: pts.reduce((a, p) => a + p.lat, 0) / pts.length, lng: pts.reduce((a, p) => a + p.lng, 0) / pts.length }
+      : dest.center;
+    const lunch = (wantsFood && pickFood(centroid)) || gap("lunch");
+    const dinner = (wantsFood && pickFood(centroid)) || gap("dinner");
+    day.stops = buildDaySchedule({ attractions: day.stops, sunsetMinutes: sunsetMin, lunch, dinner });
   });
 
   const tripId = await deps.saveTrip({ userId, req: body, itinerary });
