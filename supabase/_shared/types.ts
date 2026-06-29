@@ -21,10 +21,13 @@ export interface Poi {
 }
 
 export interface Stop {
-  placeId: string;
+  placeId: string;                 // "" for meal-gap pseudo-stops
   name: string;
   blurb: string;                       // "why a local picks this"
   travelMinutesFromPrev?: number;
+  dwellMinutes?: number;               // realistic visit length
+  kind?: "attraction" | "meal" | "meal-gap";
+  suggestedTime?: string;              // e.g. "12:30 PM" — meal stops only
 }
 
 export interface ItineraryDay {

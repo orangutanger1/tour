@@ -10,6 +10,8 @@ export interface GenerateRequest {
   tripDays: number;
   prefs: Prefs;
   destinationPlaceId?: string;
+  startLocation?: string;
+  startPlaceId?: string;
 }
 
 export interface HandlerDeps {
