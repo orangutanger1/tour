@@ -2,9 +2,19 @@
 import type { Itinerary, Poi, Prefs } from "../../_shared/types.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import { areaRadiusKm, type Viewport } from "../../_shared/area.ts";
+import { assignDays } from "../../_shared/cluster.ts";
 import { sunsetLocalMinutes, formatClock } from "../../_shared/solar.ts";
 
 export const DAILY_CAP = 10;
+
+// Per-day driving appetite by transport choice: minutes the traveler will spend
+// moving between stops, and an average speed to turn that into a distance the
+// clustering can enforce. Tunable knobs — calibrate against real trips.
+const TRANSPORT_TUNING: Record<Prefs["transport"], { budgetMin: number; speedKmh: number }> = {
+  compact: { budgetMin: 90, speedKmh: 4.5 },   // walking a tight cluster (~7 km)
+  balanced: { budgetMin: 180, speedKmh: 45 },  // some driving (~135 km)
+  far: { budgetMin: 330, speedKmh: 45 },       // long legs OK, still under ~6h (~250 km)
+};
 
 export interface GenerateRequest {
   location: string;
@@ -73,6 +83,23 @@ export async function handleGenerate(
     if (e instanceof CurationError) return { status: 502, body: { error: "could not build itinerary" } };
     throw e;
   }
+
+  // The LLM chose the places but can't see coordinates, so its day grouping
+  // produced implausible cross-region driving. Re-group the chosen stops into
+  // geographically compact days under a per-day drive budget; geography decides
+  // the days, the LLM's selection/blurbs/dwell ride along unchanged.
+  const coordsById: Record<string, { lat: number; lng: number }> = {};
+  for (const p of pois) coordsById[p.placeId] = { lat: p.lat, lng: p.lng };
+  const tuning = TRANSPORT_TUNING[body.prefs.transport];
+  const maxDriveKm = (tuning.budgetMin / 60) * tuning.speedKmh;
+  const grouped = assignDays({
+    stops: itinerary.days.flatMap((d) => d.stops),
+    coords: coordsById,
+    tripDays: body.tripDays,
+    maxDriveKm,
+    start: startCenter,
+  });
+  itinerary = { days: grouped.map((stops, i) => ({ day: i + 1, lodgingPlaceId: null, stops })) };
 
   const byId = new Map(pois.map((p) => [p.placeId, p]));
   // Route days in parallel — each day mutates only its own object, so a serial

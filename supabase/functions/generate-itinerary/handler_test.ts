@@ -209,6 +209,33 @@ Deno.test("injects meal gaps even when food selected if the day has no meal stop
   assertEquals(stops.filter((s) => s.kind === "meal-gap").length, 2);
 });
 
+Deno.test("re-clusters curated stops into geographically compact days", async () => {
+  const poiSet: Poi[] = [
+    { placeId: "N1", name: "N1", kind: "attraction", lat: 0, lng: 0 },
+    { placeId: "N2", name: "N2", kind: "attraction", lat: 0.01, lng: 0.01 },
+    { placeId: "F1", name: "F1", kind: "attraction", lat: 2, lng: 2 },
+    { placeId: "F2", name: "F2", kind: "attraction", lat: 2.01, lng: 2.01 },
+  ];
+  // LLM (blind to coords) put a near + far stop on each day — the bug.
+  const badCuration: Itinerary = { days: [
+    { day: 1, lodgingPlaceId: null, stops: [{ placeId: "N1", name: "N1", blurb: "x" }, { placeId: "F1", name: "F1", blurb: "x" }] },
+    { day: 2, lodgingPlaceId: null, stops: [{ placeId: "N2", name: "N2", blurb: "x" }, { placeId: "F2", name: "F2", blurb: "x" }] },
+  ] };
+  const deps = baseDeps({
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? [] : poiSet),
+    curate: () => Promise.resolve(badCuration),
+  });
+  const r = await handleGenerate({ location: "X", tripDays: 2, destinationPlaceId: "D", prefs }, "u1", deps);
+  assertEquals(r.status, 200);
+  const days = (r.body as { itinerary: Itinerary }).itinerary.days;
+  for (const d of days) {
+    const real = d.stops.filter((s) => s.placeId).map((s) => s.placeId);
+    const hasNear = real.some((id) => id.startsWith("N"));
+    const hasFar = real.some((id) => id.startsWith("F"));
+    assert(!(hasNear && hasFar), `day ${d.day} mixes far clusters: ${real.join(",")}`);
+  }
+});
+
 Deno.test("food fetch failure does not abort generation (no 546)", async () => {
   const deps = baseDeps({
     fetchPois: ({ kind }) => {

@@ -2,7 +2,7 @@ type LatLng = { lat: number; lng: number };
 export type Viewport = { low: LatLng; high: LatLng } | null;
 export type Transport = "compact" | "balanced" | "far";
 
-function haversineKm(a: LatLng, b: LatLng): number {
+export function haversineKm(a: LatLng, b: LatLng): number {
   const R = 6371;
   const dLat = (b.lat - a.lat) * Math.PI / 180;
   const dLng = (b.lng - a.lng) * Math.PI / 180;
