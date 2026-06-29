@@ -54,6 +54,16 @@ export default function Itinerary() {
     return [{ id: String(s.num), coordinates: { latitude: coord.lat, longitude: coord.lng }, title: `${s.num}. ${s.name}` }];
   });
 
+  // Real meal stops (have a placeId) get their own marker, labeled by meal slot
+  // rather than a number; meal-gaps have no placeId so they never map.
+  const mealMarkers = (activeDay?.stops ?? []).flatMap((s) => {
+    if (s.kind !== "meal" || !s.placeId) return [];
+    const coord = coords[s.placeId];
+    if (!coord) return [];
+    const label = s.mealSlot === "lunch" ? "Lunch" : "Dinner";
+    return [{ id: `meal-${s.placeId}`, coordinates: { latitude: coord.lat, longitude: coord.lng }, title: `${label} — ${s.name}` }];
+  });
+
   const dayPolyline = activeDay?.routePolyline
     ? [{ id: `route-${selectedDay}`, coordinates: decodePolyline(activeDay.routePolyline), color: "#E11D48", width: 4 }]
     : [];
@@ -104,7 +114,7 @@ export default function Itinerary() {
             <AppleMaps.View
               style={{ flex: 1 }}
               cameraPosition={dayMarkers[0] ? { coordinates: dayMarkers[0].coordinates, zoom: 12 } : undefined}
-              markers={dayMarkers}
+              markers={[...dayMarkers, ...mealMarkers]}
               polylines={dayPolyline}
             />
           </View>
@@ -120,24 +130,32 @@ export default function Itinerary() {
               {section.lodging ? <Text variant="caption">Stay: {section.lodging}</Text> : null}
             </View>
           )}
-          renderItem={({ item }) => (
-            item.kind === "meal-gap" ? (
-              <Card className="gap-1 border-dashed">
-                <Text variant="heading">{item.name}</Text>
+          renderItem={({ item }) => {
+            const isMeal = item.kind === "meal" || item.kind === "meal-gap";
+            const mealLabel = item.mealSlot === "lunch" ? "Lunch" : item.mealSlot === "dinner" ? "Dinner" : "Meal";
+            return isMeal ? (
+              <Card className={`gap-1 ${item.kind === "meal-gap" ? "border-dashed" : ""}`}>
+                <View className="flex-row items-baseline gap-2">
+                  {item.startTime ? <Text variant="label" className="text-accent">{item.startTime}</Text> : null}
+                  <Text variant="heading">{mealLabel}{item.placeId ? ` · ${item.name}` : ""}</Text>
+                </View>
                 <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
-                <Text variant="caption">{item.suggestedTime}{formatDwell(item.dwellMinutes) ? ` · ${formatDwell(item.dwellMinutes)}` : ""}</Text>
+                {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)}</Text> : null}
               </Card>
             ) : (
               <Card className="gap-1">
-                <Text variant="heading">{item.num}. {item.name}</Text>
+                <View className="flex-row items-baseline gap-2">
+                  {item.startTime ? <Text variant="label" className="text-accent">{item.startTime}</Text> : null}
+                  <Text variant="heading">{item.num}. {item.name}</Text>
+                </View>
                 <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
                 <View className="flex-row gap-3">
                   {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)} here</Text> : null}
                   {item.travelMinutesFromPrev != null ? <Text variant="caption">{item.travelMinutesFromPrev} min from previous</Text> : null}
                 </View>
               </Card>
-            )
-          )}
+            );
+          }}
         />
       )}
     </Screen>
