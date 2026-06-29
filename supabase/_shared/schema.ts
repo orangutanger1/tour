@@ -40,10 +40,18 @@ export function validateItinerary(
 }
 
 export function sanitizeItinerary(it: Itinerary, validPlaceIds: Set<string>): Itinerary {
+  // Keep only known places, and only the first occurrence of each: the LLM
+  // sometimes repeats a placeId across days, which then clusters into a single
+  // day's stops as visible duplicates. `seen` spans all days so dedup is global.
+  const seen = new Set<string>();
   return {
     days: it.days.map((d) => ({
       ...d,
-      stops: d.stops.filter((s) => validPlaceIds.has(s.placeId)),
+      stops: d.stops.filter((s) => {
+        if (!validPlaceIds.has(s.placeId) || seen.has(s.placeId)) return false;
+        seen.add(s.placeId);
+        return true;
+      }),
     })),
   };
 }

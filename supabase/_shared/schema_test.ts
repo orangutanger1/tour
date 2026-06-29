@@ -53,6 +53,25 @@ Deno.test("sanitizeItinerary drops unknown placeIds", () => {
   assertEquals(clean.days[0].stops.map((s) => s.placeId), ["A"]);
 });
 
+Deno.test("sanitizeItinerary drops duplicate placeIds across the whole itinerary, keeping the first", () => {
+  const dup: Itinerary = {
+    days: [
+      { day: 1, lodgingPlaceId: null, stops: [
+        { placeId: "A", name: "A", blurb: "x" },
+        { placeId: "A", name: "A again", blurb: "x2" },
+        { placeId: "B", name: "B", blurb: "y" },
+      ] },
+      { day: 2, lodgingPlaceId: null, stops: [
+        { placeId: "A", name: "A third", blurb: "x3" },
+        { placeId: "C", name: "C", blurb: "z" },
+      ] },
+    ],
+  };
+  const clean = sanitizeItinerary(dup, new Set(["A", "B", "C"]));
+  assertEquals(clean.days[0].stops.map((s) => s.placeId), ["A", "B"]);
+  assertEquals(clean.days[1].stops.map((s) => s.placeId), ["C"]);
+});
+
 Deno.test("sanitizeItinerary preserves dwellMinutes, kind, suggestedTime", () => {
   const it: Itinerary = {
     days: [{ day: 1, lodgingPlaceId: null, stops: [
