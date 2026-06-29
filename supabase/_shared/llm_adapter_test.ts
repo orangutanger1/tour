@@ -34,3 +34,15 @@ Deno.test("adapter throws on non-OK", async () => {
   try { await complete("x"); } catch { threw = true; }
   assert(threw);
 });
+
+Deno.test("adapter aborts a request that exceeds timeoutMs", async () => {
+  // httpFetch that never resolves on its own — only settles when the signal aborts.
+  const httpFetch = (_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    });
+  const complete = makeLlmComplete({ httpFetch, apiKey: "k", endpoint: "https://x", model: "m1", timeoutMs: 20 });
+  let threw = false;
+  try { await complete("x"); } catch { threw = true; }
+  assert(threw, "expected makeLlmComplete to reject when the request outlasts timeoutMs");
+});

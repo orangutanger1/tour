@@ -57,13 +57,16 @@ export async function handleGenerate(
   }
 
   const byId = new Map(pois.map((p) => [p.placeId, p]));
-  for (const day of itinerary.days) {
+  // Route days in parallel — each day mutates only its own object, so a serial
+  // loop just stacks N route round-trips and pushes the request past the gateway
+  // timeout (504). Promise.all collapses that to a single round-trip's latency.
+  await Promise.all(itinerary.days.map(async (day) => {
     day.lodgingPlaceId = anchorPoi?.placeId ?? null;
     // Only route when there is a real anchor: a lodging POI or a resolved center (non-{0,0}).
     // Without a real anchor, routing would use {0,0} (null island) producing garbage results.
     if (!anchorPoi && !hasCenter) {
       day.routePolyline = undefined;
-      continue;
+      return;
     }
     const anchor = anchorPoi ? { lat: anchorPoi.lat, lng: anchorPoi.lng } : dest.center;
     const dayPois = day.stops.map((s) => byId.get(s.placeId)).filter((p): p is Poi => !!p);
@@ -75,7 +78,7 @@ export async function handleGenerate(
       return { ...stop, travelMinutesFromPrev: minutesById.get(o.placeId) };
     });
     day.routePolyline = polyline;
-  }
+  }));
 
   const tripId = await deps.saveTrip({ userId, req: body, itinerary });
   return { status: 200, body: { tripId, itinerary } };
