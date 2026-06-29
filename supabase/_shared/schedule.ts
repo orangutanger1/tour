@@ -37,7 +37,7 @@ export function buildDaySchedule(opts: {
   attractions.forEach((stop, i) => {
     if (i > 0) clock += Math.round((stop.travelMinutesFromPrev ?? 0) * TRAVEL_BUFFER);
     if (!lunchDone && clock >= LUNCH_WINDOW_OPEN) { placeMeal(lunch, "lunch"); lunchDone = true; }
-    if (!dinnerDone && clock >= sunsetMinutes) { placeMeal(dinner, "dinner"); dinnerDone = true; }
+    if (!dinnerDone && lunchDone && clock >= sunsetMinutes) { placeMeal(dinner, "dinner"); dinnerDone = true; }
     out.push({ ...stop, startTime: formatClock(clock) });
     clock += stop.dwellMinutes ?? 0;
   });

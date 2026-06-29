@@ -45,6 +45,13 @@ Deno.test("dinner lands at or after sunset", () => {
   assert(toMin(d.startTime!) >= 1110, `dinner ${d.startTime} before sunset`);
 });
 
+Deno.test("dinner never precedes lunch even with a degenerate (near-zero) sunset", () => {
+  const out = buildDaySchedule({ attractions: [att("A", 90), att("B", 60, 20), att("C", 90, 10)], sunsetMinutes: 0, lunch: { ...lunch }, dinner: { ...dinner } });
+  const li = out.findIndex((s) => s.mealSlot === "lunch");
+  const di = out.findIndex((s) => s.mealSlot === "dinner");
+  assert(li >= 0 && di >= 0 && li < di, `lunch(${li}) must come before dinner(${di})`);
+});
+
 Deno.test("short day still appends both meals at their target times", () => {
   const out = buildDaySchedule({ attractions: [att("A", 30)], sunsetMinutes: 1110, lunch: { ...lunch }, dinner: { ...dinner } });
   const l = out.find((s) => s.mealSlot === "lunch")!;

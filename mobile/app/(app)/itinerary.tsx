@@ -60,7 +60,7 @@ export default function Itinerary() {
     if (s.kind !== "meal" || !s.placeId) return [];
     const coord = coords[s.placeId];
     if (!coord) return [];
-    const label = s.mealSlot === "lunch" ? "Lunch" : "Dinner";
+    const label = s.mealSlot === "lunch" ? "Lunch" : s.mealSlot === "dinner" ? "Dinner" : "Meal";
     return [{ id: `meal-${s.placeId}`, coordinates: { latitude: coord.lat, longitude: coord.lng }, title: `${label} — ${s.name}` }];
   });
 

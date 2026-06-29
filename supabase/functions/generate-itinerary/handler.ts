@@ -152,6 +152,7 @@ export async function handleGenerate(
   // absolute clock over the day and slots the meals at lunch/sunset.
   // `wantsFood` is already declared above (gates the food fetch); reuse it.
   const usedFood = new Set<string>();
+  // Note: mealSlot + startTime are stamped by buildDaySchedule (it decides which candidate fills which slot); these constructors intentionally omit them.
   const pickFood = (centroid: { lat: number; lng: number }): Stop | null => {
     let best: Poi | null = null;
     let bestScore = -Infinity;
