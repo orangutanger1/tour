@@ -10,6 +10,14 @@ Deno.test("handleAutocomplete returns suggestion objects", async () => {
   assertEquals(out.body, { suggestions: [{ text: "Lisbon, Portugal", placeId: "p1", types: [] }] });
 });
 
+Deno.test("forwards addresses flag to search", async () => {
+  let gotAddresses: boolean | undefined;
+  await handleAutocomplete({ query: "1 Main St", addresses: true }, {
+    search: (_q, addresses) => { gotAddresses = addresses; return Promise.resolve([]); },
+  });
+  assertEquals(gotAddresses, true);
+});
+
 Deno.test("rejects short query", async () => {
   const r = await handleAutocomplete({ query: "a" }, { search: () => Promise.resolve([]) });
   assertEquals(r.status, 400);

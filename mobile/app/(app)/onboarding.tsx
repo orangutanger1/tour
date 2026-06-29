@@ -68,7 +68,7 @@ export default function Onboarding() {
 
   useEffect(() => {
     let active = true;
-    autocompletePlaces({ query: debouncedStart, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey })
+    autocompletePlaces({ query: debouncedStart, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey, addresses: true })
       .then((s) => { if (active) setStartSuggestions(s); })
       .catch(() => { if (active) setStartSuggestions([]); });
     return () => { active = false; };
@@ -146,7 +146,7 @@ export default function Onboarding() {
           <Text variant="title">Where and how long?</Text>
           <Input placeholder="Location (e.g. Lisbon)" value={state.location}
             onChangeText={(t) => { setState((s) => ({ ...s, location: t, destinationPlaceId: undefined })); setRegions([]); }} autoCorrect={false} />
-          {suggestions.length > 0 && state.location.trim().length >= 2 ? (
+          {suggestions.length > 0 && state.location.trim().length >= 2 && !state.destinationPlaceId ? (
             <View className="gap-1">
               {suggestions.map((sug) => (
                 <Pressable key={sug.placeId} onPress={() => {
@@ -198,7 +198,7 @@ export default function Onboarding() {
           <Text variant="label">Starting point (optional)</Text>
           <Input placeholder="Home, airport, or hotel" value={state.startLocation ?? ""}
             onChangeText={(t) => setState((s) => ({ ...s, startLocation: t, startPlaceId: undefined }))} autoCorrect={false} />
-          {startSuggestions.length > 0 && (state.startLocation ?? "").trim().length >= 2 ? (
+          {startSuggestions.length > 0 && (state.startLocation ?? "").trim().length >= 2 && !state.startPlaceId ? (
             <View className="gap-1">
               {startSuggestions.map((sug) => (
                 <Pressable key={sug.placeId} onPress={() => { setState((s) => ({ ...s, startLocation: sug.text, startPlaceId: sug.placeId })); setStartSuggestions([]); }}

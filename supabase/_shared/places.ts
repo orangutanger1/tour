@@ -89,15 +89,19 @@ export async function searchAutocomplete(opts: {
   query: string;
   httpFetch: HttpFetch;
   apiKey: string;
+  // Start-point fields want street addresses + buildings (home/airport/hotel),
+  // so skip the place-type restriction the destination field uses.
+  addresses?: boolean;
 }): Promise<{ text: string; placeId: string; types: string[] }[]> {
   const { query, httpFetch, apiKey } = opts;
+  const reqBody: Record<string, unknown> = { input: query };
+  if (!opts.addresses) {
+    reqBody.includedPrimaryTypes = ["locality", "administrative_area_level_1", "country", "tourist_attraction"];
+  }
   const res = await httpFetch("https://places.googleapis.com/v1/places:autocomplete", {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
-    body: JSON.stringify({
-      input: query,
-      includedPrimaryTypes: ["locality", "administrative_area_level_1", "country", "tourist_attraction"],
-    }),
+    body: JSON.stringify(reqBody),
   });
   if (!res.ok) throw new Error(`autocomplete: HTTP ${res.status}`);
   const data = await res.json() as {

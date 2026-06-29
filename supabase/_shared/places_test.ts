@@ -75,6 +75,16 @@ Deno.test("searchAutocomplete sends includedPrimaryTypes and maps text+placeId",
   assertEquals(sentBody.includedPrimaryTypes, ["locality", "administrative_area_level_1", "country", "tourist_attraction"]);
 });
 
+Deno.test("searchAutocomplete in address mode omits type restriction (streets+buildings)", async () => {
+  let sentBody: any = null;
+  const httpFetch = ((_url: string, init?: RequestInit) => {
+    sentBody = JSON.parse(String(init?.body));
+    return Promise.resolve(new Response(JSON.stringify({ suggestions: [] }), { status: 200 }));
+  }) as unknown as typeof fetch;
+  await searchAutocomplete({ query: "1 Main St", httpFetch: httpFetch as any, apiKey: "k", addresses: true });
+  assertEquals(sentBody.includedPrimaryTypes, undefined);
+});
+
 Deno.test("searchAutocomplete returns [] for empty suggestions", async () => {
   const httpFetch = (() => Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))) as unknown as typeof fetch;
   const out = await searchAutocomplete({ query: "zzzz", httpFetch: httpFetch as any, apiKey: "k" });

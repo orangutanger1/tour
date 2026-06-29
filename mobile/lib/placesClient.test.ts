@@ -24,6 +24,13 @@ it("returns suggestion objects", async () => {
   );
 });
 
+it("sends addresses flag in the body when requested", async () => {
+  const fetchImpl = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ suggestions: [] }) }) as unknown as typeof fetch;
+  await autocompletePlaces({ query: "1 Main St", baseUrl: "http://x", anonKey: "k", addresses: true, fetchImpl });
+  const sentBody = JSON.parse((fetchImpl as jest.Mock).mock.calls[0][1].body);
+  expect(sentBody.addresses).toBe(true);
+});
+
 test("throws on non-2xx", async () => {
   await expect(autocompletePlaces({ query: "Lis", baseUrl: "https://x", anonKey: "k", fetchImpl: fakeFetch({ error: "no" }, 500) }))
     .rejects.toBeTruthy();

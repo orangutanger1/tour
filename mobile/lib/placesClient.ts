@@ -3,6 +3,7 @@ export async function autocompletePlaces(opts: {
   query: string;
   baseUrl: string;
   anonKey: string;
+  addresses?: boolean;
   fetchImpl?: typeof fetch;
 }): Promise<{ text: string; placeId: string; types: string[] }[]> {
   const query = opts.query.trim();
@@ -15,7 +16,7 @@ export async function autocompletePlaces(opts: {
       "apikey": opts.anonKey,
       "Authorization": `Bearer ${opts.anonKey}`,
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, addresses: opts.addresses }),
   });
   if (!res.ok) throw new Error(`autocomplete failed (${res.status})`);
   const data = await res.json() as { suggestions?: { text: string; placeId: string; types?: string[] }[] };
