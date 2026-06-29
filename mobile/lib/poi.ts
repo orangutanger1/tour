@@ -37,6 +37,12 @@ export function formatDwell(minutes?: number): string | null {
   return m === 0 ? `~${h}h` : `~${h}h ${m}m`;
 }
 
+// Assigns sequential 1..N display numbers to real stops, skipping meal-gaps (num = null).
+export function numberStops<T extends { kind?: string }>(stops: T[]): (T & { num: number | null })[] {
+  let n = 0;
+  return stops.map((s) => ({ ...s, num: s.kind === "meal-gap" ? null : ++n }));
+}
+
 // Google encoded polyline algorithm format → lat/lng points.
 export function decodePolyline(encoded: string): { latitude: number; longitude: number }[] {
   const points: { latitude: number; longitude: number }[] = [];

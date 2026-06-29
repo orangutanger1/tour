@@ -5,7 +5,7 @@ import { AppleMaps } from "expo-maps";
 import { useRouter } from "expo-router";
 import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
-import { getStopCoords, decodePolyline, formatDwell, type StopCoord } from "../../lib/poi";
+import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
 import { Screen, Text, Button, Card, EmptyState } from "../../components/ui";
 
 export default function Itinerary() {
@@ -22,7 +22,7 @@ export default function Itinerary() {
     const ids = new Set<string>();
     for (const d of days) {
       if (d.lodgingPlaceId) ids.add(d.lodgingPlaceId);
-      d.stops.forEach((s) => ids.add(s.placeId));
+      d.stops.forEach((s) => { if (s.placeId) ids.add(s.placeId); });
     }
     return [...ids];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,13 +46,12 @@ export default function Itinerary() {
 
   const activeDay = days.find((d) => d.day === selectedDay) ?? days[0];
 
-  // Marker number = stop's position in the day's order (i+1), kept even when a
-  // stop lacks coords — so numbers match the route polyline (drawn in stop order) and the
-  // numbered list. Renumbering the filtered set would desync markers from the route/list.
-  const dayMarkers = (activeDay?.stops ?? []).flatMap((s, i) => {
+  // Marker numbers come from numberStops so they match the list (meal-gaps are skipped in both).
+  const dayMarkers = numberStops(activeDay?.stops ?? []).flatMap((s) => {
+    if (s.num === null) return [];
     const coord = coords[s.placeId];
     if (!coord) return [];
-    return [{ id: String(i + 1), coordinates: { latitude: coord.lat, longitude: coord.lng }, title: `${i + 1}. ${s.name}` }];
+    return [{ id: String(s.num), coordinates: { latitude: coord.lat, longitude: coord.lng }, title: `${s.num}. ${s.name}` }];
   });
 
   const dayPolyline = activeDay?.routePolyline
@@ -62,7 +61,7 @@ export default function Itinerary() {
   const sections = days.map((d) => ({
     title: `Day ${d.day}`,
     lodging: d.lodgingPlaceId ? coords[d.lodgingPlaceId]?.name : undefined,
-    data: d.stops,
+    data: numberStops(d.stops),
   }));
 
   function Toggle() {
@@ -113,7 +112,7 @@ export default function Itinerary() {
               {section.lodging ? <Text variant="caption">Stay: {section.lodging}</Text> : null}
             </View>
           )}
-          renderItem={({ item, index }) => (
+          renderItem={({ item }) => (
             item.kind === "meal-gap" ? (
               <Card className="gap-1 border-dashed">
                 <Text variant="heading">{item.name}</Text>
@@ -122,7 +121,7 @@ export default function Itinerary() {
               </Card>
             ) : (
               <Card className="gap-1">
-                <Text variant="heading">{index + 1}. {item.name}</Text>
+                <Text variant="heading">{item.num}. {item.name}</Text>
                 <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
                 <View className="flex-row gap-3">
                   {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)} here</Text> : null}

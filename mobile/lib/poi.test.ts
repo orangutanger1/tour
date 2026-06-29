@@ -1,4 +1,4 @@
-import { getStopCoords, decodePolyline } from "./poi";
+import { getStopCoords, decodePolyline, numberStops } from "./poi";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function fakeClient(opts: {
@@ -57,6 +57,16 @@ test("decodes the canonical Google polyline", () => {
 });
 
 import { formatDwell } from "./poi";
+
+test("numberStops numbers real stops, skips meal-gaps", () => {
+  const out = numberStops([
+    { placeId: "A", kind: "attraction" },
+    { placeId: "", kind: "meal-gap" },
+    { placeId: "B", kind: "attraction" },
+    { placeId: "", kind: "meal-gap" },
+  ]);
+  expect(out.map((s) => s.num)).toEqual([1, null, 2, null]);
+});
 
 test("formatDwell formats hours and minutes", () => {
   expect(formatDwell(45)).toBe("~45 min");

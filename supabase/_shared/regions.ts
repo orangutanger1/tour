@@ -5,6 +5,8 @@ import { areaRadiusKm, type Viewport } from "./area.ts";
 export interface Region { label: string; hook: string; }
 
 // Below this radius a place is a city/neighborhood — not worth narrowing.
+// Coupling: this value must fall inside the "far" transport clamp band [25, 150] from
+// areaRadiusKm (area.ts). If it moves outside that range the clamp silently breaks the gate.
 export const REGION_MIN_RADIUS_KM = 60;
 
 export interface SuggestRegionsDeps {
