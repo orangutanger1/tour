@@ -145,7 +145,7 @@ export default function Onboarding() {
         <View className="gap-4">
           <Text variant="title">Where and how long?</Text>
           <Input placeholder="Location (e.g. Lisbon)" value={state.location}
-            onChangeText={(t) => setState((s) => ({ ...s, location: t, destinationPlaceId: undefined }))} autoCorrect={false} />
+            onChangeText={(t) => { setState((s) => ({ ...s, location: t, destinationPlaceId: undefined })); setRegions([]); }} autoCorrect={false} />
           {suggestions.length > 0 && state.location.trim().length >= 2 ? (
             <View className="gap-1">
               {suggestions.map((sug) => (
