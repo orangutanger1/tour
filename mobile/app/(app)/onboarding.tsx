@@ -1,7 +1,6 @@
 // mobile/app/(app)/onboarding.tsx
 import { useEffect, useState } from "react";
 import { View, Pressable } from "react-native";
-import { Picker } from "@react-native-picker/picker";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
@@ -146,19 +145,19 @@ export default function Onboarding() {
               ))}
             </View>
           ) : null}
-          <Text variant="label">Days: {state.tripDays}</Text>
+          <Text variant="label">Days</Text>
           <View className="flex-row flex-wrap gap-2">
             {DAY_PRESETS.map((d) => (
               <Chip key={d} label={String(d)} selected={state.tripDays === d} onPress={() => setState((s) => ({ ...s, tripDays: d }))} />
             ))}
           </View>
-          <Picker
-            selectedValue={state.tripDays}
-            onValueChange={(v) => setState((s) => ({ ...s, tripDays: Number(v) }))}>
-            {Array.from({ length: MAX_TRIP_DAYS }, (_, i) => i + 1).map((d) => (
-              <Picker.Item key={d} label={`${d} ${d === 1 ? "day" : "days"}`} value={d} />
-            ))}
-          </Picker>
+          <View className="flex-row items-center gap-3">
+            <Button title="–" variant="secondary" className="w-12" disabled={state.tripDays <= 1}
+              onPress={() => setState((s) => ({ ...s, tripDays: Math.max(1, s.tripDays - 1) }))} />
+            <Text variant="title" className="w-24 text-center">{state.tripDays} {state.tripDays === 1 ? "day" : "days"}</Text>
+            <Button title="+" variant="secondary" className="w-12" disabled={state.tripDays >= MAX_TRIP_DAYS}
+              onPress={() => setState((s) => ({ ...s, tripDays: Math.min(MAX_TRIP_DAYS, s.tripDays + 1) }))} />
+          </View>
         </View>
       )}
 
