@@ -27,7 +27,8 @@ export interface Stop {
   travelMinutesFromPrev?: number;
   dwellMinutes?: number;               // realistic visit length
   kind?: "attraction" | "meal" | "meal-gap";
-  suggestedTime?: string;              // e.g. "12:30 PM" — meal stops only
+  startTime?: string;                  // absolute clock, e.g. "9:00 AM"
+  mealSlot?: "lunch" | "dinner";       // meal + meal-gap stops only
 }
 
 export interface ItineraryDay {
