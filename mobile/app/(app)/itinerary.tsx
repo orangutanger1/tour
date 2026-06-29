@@ -5,7 +5,7 @@ import { AppleMaps } from "expo-maps";
 import { useRouter } from "expo-router";
 import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
-import { getStopCoords, decodePolyline, type StopCoord } from "../../lib/poi";
+import { getStopCoords, decodePolyline, formatDwell, type StopCoord } from "../../lib/poi";
 import { Screen, Text, Button, Card, EmptyState } from "../../components/ui";
 
 export default function Itinerary() {
@@ -108,19 +108,28 @@ export default function Itinerary() {
           keyExtractor={(item, i) => item.placeId + i}
           contentContainerClassName="gap-3 pb-4"
           renderSectionHeader={({ section }) => (
-            <View className="pt-2 pb-1">
+            <View className="bg-bg pt-2 pb-2">
               <Text variant="heading">{section.title}</Text>
               {section.lodging ? <Text variant="caption">Stay: {section.lodging}</Text> : null}
             </View>
           )}
           renderItem={({ item, index }) => (
-            <Card className="gap-1">
-              <Text variant="heading">{index + 1}. {item.name}</Text>
-              <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
-              {item.travelMinutesFromPrev != null ? (
-                <Text variant="caption">{item.travelMinutesFromPrev} min from previous</Text>
-              ) : null}
-            </Card>
+            item.kind === "meal-gap" ? (
+              <Card className="gap-1 border-dashed">
+                <Text variant="heading">{item.name}</Text>
+                <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
+                <Text variant="caption">{item.suggestedTime}{formatDwell(item.dwellMinutes) ? ` · ${formatDwell(item.dwellMinutes)}` : ""}</Text>
+              </Card>
+            ) : (
+              <Card className="gap-1">
+                <Text variant="heading">{index + 1}. {item.name}</Text>
+                <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
+                <View className="flex-row gap-3">
+                  {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)} here</Text> : null}
+                  {item.travelMinutesFromPrev != null ? <Text variant="caption">{item.travelMinutesFromPrev} min from previous</Text> : null}
+                </View>
+              </Card>
+            )
           )}
         />
       )}

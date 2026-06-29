@@ -55,3 +55,12 @@ test("decodes the canonical Google polyline", () => {
   expect(pts.map((p) => [Math.round(p.latitude * 1000) / 1000, Math.round(p.longitude * 1000) / 1000]))
     .toEqual([[38.5, -120.2], [40.7, -120.95], [43.252, -126.453]]);
 });
+
+import { formatDwell } from "./poi";
+
+test("formatDwell formats hours and minutes", () => {
+  expect(formatDwell(45)).toBe("~45 min");
+  expect(formatDwell(60)).toBe("~1h");
+  expect(formatDwell(90)).toBe("~1h 30m");
+  expect(formatDwell(undefined)).toBeNull();
+});

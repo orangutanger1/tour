@@ -29,6 +29,14 @@ export async function getStopCoords(
   return out;
 }
 
+export function formatDwell(minutes?: number): string | null {
+  if (minutes == null) return null;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `~${m} min`;
+  return m === 0 ? `~${h}h` : `~${h}h ${m}m`;
+}
+
 // Google encoded polyline algorithm format → lat/lng points.
 export function decodePolyline(encoded: string): { latitude: number; longitude: number }[] {
   const points: { latitude: number; longitude: number }[] = [];
