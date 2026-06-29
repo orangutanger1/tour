@@ -5,7 +5,7 @@ import { AppleMaps } from "expo-maps";
 import { useRouter } from "expo-router";
 import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
-import { getStopCoords, type StopCoord } from "../../lib/poi";
+import { getStopCoords, decodePolyline, type StopCoord } from "../../lib/poi";
 import { Screen, Text, Button, Card, EmptyState } from "../../components/ui";
 
 export default function Itinerary() {
@@ -13,6 +13,7 @@ export default function Itinerary() {
   const router = useRouter();
   const [view, setView] = useState<"list" | "map">("list");
   const [coords, setCoords] = useState<Record<string, StopCoord>>({});
+  const [selectedDay, setSelectedDay] = useState(1);
 
   const days = data?.itinerary.days ?? [];
   const empty = days.length === 0 || days.every((d) => d.stops.length === 0);
@@ -43,10 +44,17 @@ export default function Itinerary() {
     );
   }
 
-  const markers = placeIds
-    .map((id) => coords[id])
-    .filter((c): c is StopCoord => !!c)
-    .map((c, idx) => ({ id: String(idx), coordinates: { latitude: c.lat, longitude: c.lng }, title: c.name }));
+  const activeDay = days.find((d) => d.day === selectedDay) ?? days[0];
+
+  const dayMarkers = (activeDay?.stops ?? []).flatMap((s, i) => {
+    const coord = coords[s.placeId];
+    if (!coord) return [];
+    return [{ id: String(i + 1), coordinates: { latitude: coord.lat, longitude: coord.lng }, title: `${i + 1}. ${s.name}` }];
+  });
+
+  const dayPolyline = activeDay?.routePolyline
+    ? [{ id: `route-${selectedDay}`, coordinates: decodePolyline(activeDay.routePolyline), color: "#E11D48", width: 4 }]
+    : [];
 
   const sections = days.map((d) => ({
     title: `Day ${d.day}`,
@@ -70,12 +78,26 @@ export default function Itinerary() {
     <Screen>
       <Toggle />
       {view === "map" ? (
-        <View className="flex-1 rounded-lg overflow-hidden">
-          <AppleMaps.View
-            style={{ flex: 1 }}
-            cameraPosition={markers[0] ? { coordinates: markers[0].coordinates, zoom: 11 } : undefined}
-            markers={markers}
-          />
+        <View className="flex-1">
+          <View className="flex-row flex-wrap gap-2 mb-2">
+            {days.map((d) => (
+              <Pressable
+                key={d.day}
+                onPress={() => setSelectedDay(d.day)}
+                className={`px-3 py-1.5 rounded-pill ${selectedDay === d.day ? "bg-accent" : "bg-surface-2"}`}
+              >
+                <Text variant="label" className={selectedDay === d.day ? "text-white" : "text-ink-muted"}>Day {d.day}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <View className="flex-1 rounded-lg overflow-hidden">
+            <AppleMaps.View
+              style={{ flex: 1 }}
+              cameraPosition={dayMarkers[0] ? { coordinates: dayMarkers[0].coordinates, zoom: 12 } : undefined}
+              markers={dayMarkers}
+              polylines={dayPolyline}
+            />
+          </View>
         </View>
       ) : (
         <SectionList
@@ -88,9 +110,9 @@ export default function Itinerary() {
               {section.lodging ? <Text variant="caption">Stay: {section.lodging}</Text> : null}
             </View>
           )}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <Card className="gap-1">
-              <Text variant="heading">{item.name}</Text>
+              <Text variant="heading">{index + 1}. {item.name}</Text>
               <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
               {item.travelMinutesFromPrev != null ? (
                 <Text variant="caption">{item.travelMinutesFromPrev} min from previous</Text>
