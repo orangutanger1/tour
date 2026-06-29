@@ -47,7 +47,6 @@ export async function handleGenerate(
 
   const pois = [...attractions, ...food];
   const anchorPoi = lodging[0] ?? null;
-  const anchor = anchorPoi ? { lat: anchorPoi.lat, lng: anchorPoi.lng } : dest.center;
 
   let itinerary: Itinerary;
   try {
@@ -60,6 +59,13 @@ export async function handleGenerate(
   const byId = new Map(pois.map((p) => [p.placeId, p]));
   for (const day of itinerary.days) {
     day.lodgingPlaceId = anchorPoi?.placeId ?? null;
+    // Only route when there is a real anchor: a lodging POI or a resolved center (non-{0,0}).
+    // Without a real anchor, routing would use {0,0} (null island) producing garbage results.
+    if (!anchorPoi && !hasCenter) {
+      day.routePolyline = undefined;
+      continue;
+    }
+    const anchor = anchorPoi ? { lat: anchorPoi.lat, lng: anchorPoi.lng } : dest.center;
     const dayPois = day.stops.map((s) => byId.get(s.placeId)).filter((p): p is Poi => !!p);
     const { ordered, polyline } = await deps.orderStops({ stops: dayPois, anchor, travelMode });
     const minutesById = new Map(ordered.map((o) => [o.placeId, o.travelMinutesFromPrev]));

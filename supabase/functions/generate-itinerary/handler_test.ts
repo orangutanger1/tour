@@ -65,3 +65,54 @@ Deno.test("handleGenerate attaches routePolyline to each day", async () => {
   const out: any = await handleGenerate(req as any, "u1", deps);
   assertEquals(out.body.itinerary.days[0].routePolyline, "poly1");
 });
+
+Deno.test("no-anchor path (free-typed location, no lodging): skips orderStops, routePolyline is undefined, stops preserved", async () => {
+  let orderStopsCalled = false;
+  let fetchPoisLocationBias: unknown = "SENTINEL";
+  const deps = baseDeps({
+    // No destinationPlaceId => free-typed, resolveDestination returns {0,0}
+    resolveDestination: () => Promise.resolve({ center: { lat: 0, lng: 0 }, viewport: null }),
+    fetchPois: (o: any) => {
+      if (o.kind === "attraction" || o.kind === "food") {
+        fetchPoisLocationBias = o.locationBias;
+        return Promise.resolve([{ placeId: "A", name: "A", kind: o.kind, lat: 1, lng: 2 }]);
+      }
+      // No lodging
+      return Promise.resolve([]);
+    },
+    curate: () => Promise.resolve({ days: [{ day: 1, lodgingPlaceId: null, stops: [{ placeId: "A", name: "A", blurb: "x" }] }] }),
+    orderStops: () => { orderStopsCalled = true; return Promise.resolve({ ordered: [], polyline: undefined }); },
+  });
+  // No destinationPlaceId — free-typed location
+  const req = { location: "Somewhere", tripDays: 1, prefs };
+  const out: any = await handleGenerate(req as any, "u1", deps);
+  assertEquals(out.status, 200);
+  // (a) orderStops must NOT have been called
+  assertEquals(orderStopsCalled, false, "orderStops should not be called when anchor is {0,0} and no lodging");
+  // (b) routePolyline is undefined and stops are still present
+  assertEquals(out.body.itinerary.days[0].routePolyline, undefined);
+  assert(out.body.itinerary.days[0].stops.length > 0, "day must still have its stops");
+  // (c) locationBias passed to fetchPois was undefined (because center is {0,0})
+  assertEquals(fetchPoisLocationBias, undefined, "fetchPois must receive locationBias: undefined when center is {0,0}");
+});
+
+Deno.test("real center + no lodging: orderStops IS called (city-center anchor)", async () => {
+  let orderStopsCalled = false;
+  const deps = baseDeps({
+    resolveDestination: () => Promise.resolve({ center: { lat: 48.85, lng: 2.35 }, viewport: null }),
+    fetchPois: (o: any) => {
+      if (o.kind === "lodging") return Promise.resolve([]);
+      return Promise.resolve([{ placeId: "A", name: "A", kind: o.kind, lat: 48.85, lng: 2.35 }]);
+    },
+    curate: () => Promise.resolve({ days: [{ day: 1, lodgingPlaceId: null, stops: [{ placeId: "A", name: "A", blurb: "x" }] }] }),
+    orderStops: ({ stops }) => {
+      orderStopsCalled = true;
+      return Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 5 })), polyline: "poly2" });
+    },
+  });
+  const req = { location: "Paris", tripDays: 1, destinationPlaceId: "paris-id", prefs };
+  const out: any = await handleGenerate(req as any, "u1", deps);
+  assertEquals(out.status, 200);
+  assertEquals(orderStopsCalled, true, "orderStops should be called when center is non-zero even without lodging");
+  assertEquals(out.body.itinerary.days[0].routePolyline, "poly2");
+});
