@@ -27,6 +27,20 @@ export function stateFromProfile(prefs: Prefs | null): OnboardingState {
   };
 }
 
+// Rebuild onboarding state from a request the user already submitted, so an
+// in-progress trip survives remounts (e.g. "Edit trip" after a failed generate).
+export function stateFromRequest(req: GenerateRequest): OnboardingState {
+  return {
+    interests: req.prefs.interests,
+    budget: req.prefs.budget,
+    pace: req.prefs.pace,
+    transport: req.prefs.transport,
+    location: req.location,
+    tripDays: req.tripDays,
+    destinationPlaceId: req.destinationPlaceId,
+  };
+}
+
 export function canContinue(step: number, s: OnboardingState): boolean {
   if (step === 0) return s.interests.length >= 1;
   if (step === 1) return s.location.trim().length > 0 && s.tripDays >= 1 && s.tripDays <= MAX_TRIP_DAYS;

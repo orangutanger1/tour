@@ -96,6 +96,26 @@ Deno.test("no-anchor path (free-typed location, no lodging): skips orderStops, r
   assertEquals(fetchPoisLocationBias, undefined, "fetchPois must receive locationBias: undefined when center is {0,0}");
 });
 
+Deno.test("routes all days concurrently, not serially", async () => {
+  let active = 0, maxActive = 0;
+  const day = (d: number) => ({ day: d, lodgingPlaceId: null, stops: [{ placeId: "A", name: "A", blurb: "x" }] });
+  const deps = baseDeps({
+    resolveDestination: () => Promise.resolve({ center: { lat: 1, lng: 2 }, viewport: null }),
+    fetchPois: (o: any) => Promise.resolve(o.kind === "lodging" ? [] : [{ placeId: "A", name: "A", kind: o.kind, lat: 1, lng: 2 }]),
+    curate: () => Promise.resolve({ days: [day(1), day(2), day(3)] }),
+    orderStops: async ({ stops }) => {
+      active++; maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setTimeout(r, 10));
+      active--;
+      return { ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 1 })), polyline: "p" };
+    },
+  });
+  const req = { location: "X", tripDays: 3, destinationPlaceId: "p1", prefs };
+  const out: any = await handleGenerate(req as any, "u1", deps);
+  assertEquals(out.status, 200);
+  assert(maxActive >= 2, `expected per-day routing to overlap, got maxActive=${maxActive}`);
+});
+
 Deno.test("real center + no lodging: orderStops IS called (city-center anchor)", async () => {
   let orderStopsCalled = false;
   const deps = baseDeps({

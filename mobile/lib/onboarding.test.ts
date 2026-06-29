@@ -1,5 +1,5 @@
 import {
-  INTERESTS, MAX_TRIP_DAYS, stateFromProfile, canContinue, prefsFromState, buildRequest,
+  INTERESTS, MAX_TRIP_DAYS, stateFromProfile, stateFromRequest, canContinue, prefsFromState, buildRequest,
   type OnboardingState,
 } from "./onboarding";
 import type { Prefs } from "./types";
@@ -27,6 +27,14 @@ test("stateFromProfile uses defaults when null", () => {
   expect(s.interests).toEqual([]);
   expect(s.budget).toBe("mid");
   expect(s.pace).toBe("balanced");
+});
+
+test("stateFromRequest round-trips buildRequest (rehydrate in-progress trip)", () => {
+  const s: OnboardingState = {
+    interests: ["scenic", "food", "outdoors"], budget: "high", pace: "balanced", transport: "far",
+    location: "Canada", tripDays: 5, destinationPlaceId: "p-canada",
+  };
+  expect(stateFromRequest(buildRequest(s))).toEqual(s);
 });
 
 test("canContinue step 0 needs >=1 interest", () => {
