@@ -78,6 +78,14 @@ export default function Itinerary() {
 
   return (
     <Screen>
+      <View className="flex-row items-center justify-between mb-2">
+        <Pressable onPress={() => router.replace("/")} hitSlop={8}>
+          <Text variant="label" className="text-ink-muted">‹ Home</Text>
+        </Pressable>
+        <Pressable onPress={() => router.replace("/onboarding")} hitSlop={8}>
+          <Text variant="label" className="text-accent">New trip</Text>
+        </Pressable>
+      </View>
       <Toggle />
       {view === "map" ? (
         <View className="flex-1">
