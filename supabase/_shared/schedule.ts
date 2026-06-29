@@ -25,11 +25,12 @@ export function buildDaySchedule(opts: {
   let dinnerDone = false;
 
   const placeMeal = (meal: Stop, slot: "lunch" | "dinner") => {
-    meal.startTime = formatClock(clock);
-    meal.mealSlot = slot;
-    const dwell = meal.dwellMinutes ?? 60;
-    meal.dwellMinutes = dwell;
-    out.push(meal);
+    const m = { ...meal };
+    m.startTime = formatClock(clock);
+    m.mealSlot = slot;
+    const dwell = m.dwellMinutes ?? 60;
+    m.dwellMinutes = dwell;
+    out.push(m);
     clock += MEAL_TRAVEL_MIN + dwell;
   };
 
@@ -37,8 +38,7 @@ export function buildDaySchedule(opts: {
     if (i > 0) clock += Math.round((stop.travelMinutesFromPrev ?? 0) * TRAVEL_BUFFER);
     if (!lunchDone && clock >= LUNCH_WINDOW_OPEN) { placeMeal(lunch, "lunch"); lunchDone = true; }
     if (!dinnerDone && clock >= sunsetMinutes) { placeMeal(dinner, "dinner"); dinnerDone = true; }
-    stop.startTime = formatClock(clock);
-    out.push(stop);
+    out.push({ ...stop, startTime: formatClock(clock) });
     clock += stop.dwellMinutes ?? 0;
   });
 
