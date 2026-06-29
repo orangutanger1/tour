@@ -7,7 +7,7 @@ const pois: Poi[] = [
   { placeId: "A", name: "A", kind: "attraction", lat: 0, lng: 0 },
   { placeId: "B", name: "B", kind: "food", lat: 0, lng: 0 },
 ];
-const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced" };
+const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced", transport: "balanced" };
 
 function reply(it: unknown): string {
   return JSON.stringify(it);

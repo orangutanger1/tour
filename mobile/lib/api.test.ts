@@ -2,7 +2,7 @@
 import { generateItinerary, ApiError, type GenerateResult } from "./api";
 import type { Prefs } from "./types";
 
-const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced" };
+const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced", transport: "balanced" };
 const req = { location: "Lisbon", tripDays: 2, prefs };
 const result: GenerateResult = {
   tripId: "t1",

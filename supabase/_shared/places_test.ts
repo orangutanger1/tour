@@ -1,9 +1,9 @@
 // supabase/_shared/places_test.ts
 import { assert, assertEquals } from "jsr:@std/assert";
-import { fetchPois, searchAutocomplete } from "./places.ts";
+import { fetchPois, searchAutocomplete, fetchPlaceDetails } from "./places.ts";
 import type { Poi, Prefs } from "./types.ts";
 
-const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced" };
+const prefs: Prefs = { interests: [], budget: "mid", pace: "balanced", transport: "balanced" };
 
 function fakeResponse(body: unknown, ok = true, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -56,20 +56,62 @@ Deno.test("fetchPois throws on non-OK response", async () => {
   assert(threw);
 });
 
-Deno.test("searchAutocomplete maps predictions to strings", async () => {
-  const httpFetch = ((_url: string, _init?: RequestInit) =>
-    Promise.resolve(new Response(JSON.stringify({
+Deno.test("searchAutocomplete sends includedPrimaryTypes and maps text+placeId", async () => {
+  let sentBody: any = null;
+  const httpFetch = ((_url: string, init?: RequestInit) => {
+    sentBody = JSON.parse(String(init?.body));
+    return Promise.resolve(new Response(JSON.stringify({
       suggestions: [
-        { placePrediction: { text: { text: "Lisbon, Portugal" } } },
-        { placePrediction: { text: { text: "Lisbon, OH, USA" } } },
+        { placePrediction: { placeId: "p1", text: { text: "Lisbon, Portugal" } } },
+        { placePrediction: { placeId: "p2", text: { text: "Lisbon, OH, USA" } } },
       ],
-    }), { status: 200 }))) as unknown as typeof fetch;
+    }), { status: 200 }));
+  }) as unknown as typeof fetch;
   const out = await searchAutocomplete({ query: "Lis", httpFetch: httpFetch as any, apiKey: "k" });
-  assertEquals(out, ["Lisbon, Portugal", "Lisbon, OH, USA"]);
+  assertEquals(out, [
+    { text: "Lisbon, Portugal", placeId: "p1" },
+    { text: "Lisbon, OH, USA", placeId: "p2" },
+  ]);
+  assertEquals(sentBody.includedPrimaryTypes, ["locality", "administrative_area_level_1", "country", "tourist_attraction"]);
 });
 
 Deno.test("searchAutocomplete returns [] for empty suggestions", async () => {
   const httpFetch = (() => Promise.resolve(new Response(JSON.stringify({}), { status: 200 }))) as unknown as typeof fetch;
   const out = await searchAutocomplete({ query: "zzzz", httpFetch: httpFetch as any, apiKey: "k" });
   assertEquals(out, []);
+});
+
+Deno.test("fetchPois sends locationBias circle capped at 50km", async () => {
+  let sentBody: any = null;
+  const httpFetch = (_url: string, init?: RequestInit) => {
+    sentBody = JSON.parse(String(init?.body));
+    return Promise.resolve(fakeResponse(placesBody));
+  };
+  await fetchPois({
+    location: "Lisbon", kind: "attraction", prefs, httpFetch, apiKey: "k",
+    locationBias: { center: { lat: 38.7, lng: -9.1 }, radiusKm: 150 },
+  });
+  assertEquals(sentBody.locationBias.circle.center, { latitude: 38.7, longitude: -9.1 });
+  assertEquals(sentBody.locationBias.circle.radius, 50000); // capped at 50000 m
+});
+
+Deno.test("fetchPlaceDetails parses center, viewport, types", async () => {
+  let sawUrl = "", sawMask = "";
+  const httpFetch = ((url: string, init?: RequestInit) => {
+    sawUrl = url;
+    sawMask = (init?.headers as Record<string, string>)["X-Goog-FieldMask"] ?? "";
+    return Promise.resolve(new Response(JSON.stringify({
+      location: { latitude: 38.7, longitude: -9.1 },
+      viewport: { low: { latitude: 38.6, longitude: -9.2 }, high: { latitude: 38.8, longitude: -9.0 } },
+      types: ["locality", "political"],
+      displayName: { text: "Lisbon" },
+    }), { status: 200 }));
+  }) as unknown as typeof fetch;
+  const d = await fetchPlaceDetails({ placeId: "p1", httpFetch: httpFetch as any, apiKey: "k" });
+  assertEquals(d.center, { lat: 38.7, lng: -9.1 });
+  assertEquals(d.viewport, { low: { lat: 38.6, lng: -9.2 }, high: { lat: 38.8, lng: -9.0 } });
+  assertEquals(d.types, ["locality", "political"]);
+  assertEquals(d.name, "Lisbon");
+  assert(sawUrl.includes("/v1/places/p1"));
+  assert(sawMask.includes("viewport"));
 });

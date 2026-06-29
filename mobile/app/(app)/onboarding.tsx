@@ -1,6 +1,7 @@
 // mobile/app/(app)/onboarding.tsx
 import { useEffect, useState } from "react";
 import { View, Pressable } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
@@ -28,6 +29,11 @@ const PACES: { value: Prefs["pace"]; label: string; desc: string }[] = [
   { value: "balanced", label: "Balanced", desc: "4–5 stops/day" },
   { value: "packed", label: "Packed", desc: "6–8 stops/day" },
 ];
+const TRANSPORTS: { value: Prefs["transport"]; label: string; desc: string }[] = [
+  { value: "compact", label: "Compact", desc: "Stay close. Walkable cluster, minimal transit." },
+  { value: "balanced", label: "Balanced", desc: "City + nearby. Some driving." },
+  { value: "far", label: "Far-ranging", desc: "Cover a wide region. Longer legs OK." },
+];
 const DAY_PRESETS = [3, 5, 7, 10, 14];
 
 export default function Onboarding() {
@@ -36,7 +42,7 @@ export default function Onboarding() {
   const tripFlow = useTripFlow();
   const [step, setStep] = useState(0);
   const [state, setState] = useState<OnboardingState>(stateFromProfile(null));
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<{ text: string; placeId: string }[]>([]);
   const debouncedLocation = useDebouncedValue(state.location, 300);
 
   useEffect(() => {
@@ -105,6 +111,16 @@ export default function Onboarding() {
               </Pressable>
             ))}
           </View>
+          <Text variant="label">Transport</Text>
+          <View className="gap-2">
+            {TRANSPORTS.map((t) => (
+              <Pressable key={t.value} onPress={() => setState((s) => ({ ...s, transport: t.value }))}
+                className={`p-3 rounded-lg border ${state.transport === t.value ? "bg-accent-soft border-accent" : "bg-surface border-border"}`}>
+                <Text variant="label" className={state.transport === t.value ? "text-accent" : "text-ink"}>{t.label}</Text>
+                <Text variant="caption">{t.desc}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       )}
 
@@ -112,13 +128,13 @@ export default function Onboarding() {
         <View className="gap-4">
           <Text variant="title">Where and how long?</Text>
           <Input placeholder="Location (e.g. Lisbon)" value={state.location}
-            onChangeText={(t) => setState((s) => ({ ...s, location: t }))} autoCorrect={false} />
+            onChangeText={(t) => setState((s) => ({ ...s, location: t, destinationPlaceId: undefined }))} autoCorrect={false} />
           {suggestions.length > 0 && state.location.trim().length >= 2 ? (
             <View className="gap-1">
               {suggestions.map((sug) => (
-                <Pressable key={sug} onPress={() => { setState((s) => ({ ...s, location: sug })); setSuggestions([]); }}
+                <Pressable key={sug.placeId} onPress={() => { setState((s) => ({ ...s, location: sug.text, destinationPlaceId: sug.placeId })); setSuggestions([]); }}
                   className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
-                  <Text variant="body">{sug}</Text>
+                  <Text variant="body">{sug.text}</Text>
                 </Pressable>
               ))}
             </View>
@@ -129,11 +145,13 @@ export default function Onboarding() {
               <Chip key={d} label={String(d)} selected={state.tripDays === d} onPress={() => setState((s) => ({ ...s, tripDays: d }))} />
             ))}
           </View>
-          <View className="flex-row items-center gap-3">
-            <Button title="–" variant="secondary" size="sm" onPress={() => setState((s) => ({ ...s, tripDays: Math.max(1, s.tripDays - 1) }))} />
-            <Text variant="body">{state.tripDays} {state.tripDays === 1 ? "day" : "days"}</Text>
-            <Button title="+" variant="secondary" size="sm" onPress={() => setState((s) => ({ ...s, tripDays: Math.min(MAX_TRIP_DAYS, s.tripDays + 1) }))} />
-          </View>
+          <Picker
+            selectedValue={state.tripDays}
+            onValueChange={(v) => setState((s) => ({ ...s, tripDays: Number(v) }))}>
+            {Array.from({ length: MAX_TRIP_DAYS }, (_, i) => i + 1).map((d) => (
+              <Picker.Item key={d} label={`${d} ${d === 1 ? "day" : "days"}`} value={d} />
+            ))}
+          </Picker>
         </View>
       )}
 
@@ -144,6 +162,7 @@ export default function Onboarding() {
           <Text variant="body">Days: {state.tripDays}</Text>
           <Text variant="body">Interests: {state.interests.join(", ")}</Text>
           <Text variant="body">Budget: {state.budget} · Pace: {state.pace}</Text>
+          <Text variant="body">Transport: {state.transport}</Text>
         </Card>
       )}
 

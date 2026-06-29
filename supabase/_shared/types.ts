@@ -3,6 +3,7 @@ export interface Prefs {
   interests: string[];                 // e.g. ["scenic", "food", "history"]
   budget: "low" | "mid" | "high";
   pace: "relaxed" | "balanced" | "packed";
+  transport: "compact" | "balanced" | "far";
   diet?: string[];                     // optional, e.g. ["vegetarian"]
   accessibility?: string[];            // optional
 }
@@ -30,6 +31,7 @@ export interface ItineraryDay {
   day: number;                         // 1-indexed
   lodgingPlaceId: string | null;
   stops: Stop[];
+  routePolyline?: string;
 }
 
 export interface Itinerary {

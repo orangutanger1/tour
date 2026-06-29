@@ -3,7 +3,7 @@ import type { HttpFetch, Poi } from "./types.ts";
 
 type Ordered = { placeId: string; travelMinutesFromPrev: number };
 
-const FIELD_MASK = "routes.optimizedIntermediateWaypointIndex,routes.legs.duration";
+const FIELD_MASK = "routes.optimizedIntermediateWaypointIndex,routes.legs.duration,routes.polyline.encodedPolyline";
 
 function durationToMinutes(d: unknown): number {
   if (typeof d !== "string") return 0;
@@ -11,8 +11,8 @@ function durationToMinutes(d: unknown): number {
   return Number.isFinite(seconds) ? Math.round(seconds / 60) : 0;
 }
 
-function fallback(stops: Poi[]): Ordered[] {
-  return stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 0 }));
+function fallback(stops: Poi[]): { ordered: Ordered[]; polyline?: string } {
+  return { ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 0 })), polyline: undefined };
 }
 
 export async function orderStops(opts: {
@@ -21,10 +21,11 @@ export async function orderStops(opts: {
   httpFetch: HttpFetch;
   apiKey: string;
   maxStops?: number;
-}): Promise<Ordered[]> {
+  travelMode?: "WALK" | "DRIVE";
+}): Promise<{ ordered: Ordered[]; polyline?: string }> {
   const { anchor, httpFetch, apiKey } = opts;
   const capped = opts.stops.slice(0, opts.maxStops ?? 8);
-  if (capped.length === 0) return [];
+  if (capped.length === 0) return { ordered: [], polyline: undefined };
 
   const waypoint = (lat: number, lng: number) => ({ location: { latLng: { latitude: lat, longitude: lng } } });
 
@@ -40,14 +41,14 @@ export async function orderStops(opts: {
         origin: waypoint(anchor.lat, anchor.lng),
         destination: waypoint(anchor.lat, anchor.lng),
         intermediates: capped.map((s) => waypoint(s.lat, s.lng)),
-        travelMode: "DRIVE",
+        travelMode: opts.travelMode ?? "DRIVE",
         optimizeWaypointOrder: true,
       }),
     });
     if (!res.ok) return fallback(capped);
 
     const data = await res.json() as {
-      routes?: Array<{ optimizedIntermediateWaypointIndex?: number[]; legs?: Array<{ duration?: string }> }>;
+      routes?: Array<{ optimizedIntermediateWaypointIndex?: number[]; legs?: Array<{ duration?: string }>; polyline?: { encodedPolyline?: string } }>;
     };
     const route = data.routes?.[0];
     const order = route?.optimizedIntermediateWaypointIndex;
@@ -55,10 +56,12 @@ export async function orderStops(opts: {
 
     const legs = route?.legs ?? [];
     // legs[0] = anchor -> first stop; legs[i] = (i-1)th stop -> ith stop
-    return order.map((origIdx, position) => ({
+    const ordered = order.map((origIdx, position) => ({
       placeId: capped[origIdx].placeId,
       travelMinutesFromPrev: durationToMinutes(legs[position]?.duration),
     }));
+    const polyline = route?.polyline?.encodedPolyline;
+    return { ordered, polyline };
   } catch {
     return fallback(capped);
   }

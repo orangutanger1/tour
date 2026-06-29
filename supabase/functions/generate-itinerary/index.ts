@@ -1,7 +1,7 @@
 // supabase/functions/generate-itinerary/index.ts
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { handleGenerate, type GenerateRequest, type HandlerDeps } from "./handler.ts";
-import { fetchPois } from "../../_shared/places.ts";
+import { fetchPois, fetchPlaceDetails } from "../../_shared/places.ts";
 import { curateItinerary } from "../../_shared/curate.ts";
 import { orderStops } from "../../_shared/routes.ts";
 import { makeLlmComplete } from "../../_shared/llm_adapter.ts";
@@ -40,6 +40,14 @@ Deno.serve(async (req: Request) => {
         .eq("user_id", uid)
         .gte("created_at", startOfTodayISO());
       return count ?? 0;
+    },
+    resolveDestination: async ({ placeId, location: _location }) => {
+      if (placeId) {
+        const d = await fetchPlaceDetails({ placeId, httpFetch: fetch, apiKey: PLACES_KEY });
+        return { center: d.center, viewport: d.viewport };
+      }
+      // fallback: no placeId (free-typed) — bias off, let textQuery carry the location
+      return { center: { lat: 0, lng: 0 }, viewport: null };
     },
     fetchPois: (o) =>
       fetchPois({

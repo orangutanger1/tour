@@ -7,7 +7,7 @@ const pois: Poi[] = [
   { placeId: "A1", name: "Old Town", kind: "attraction", lat: 0, lng: 0 },
   { placeId: "F1", name: "Corner Cafe", kind: "food", lat: 0, lng: 0 },
 ];
-const prefs: Prefs = { interests: ["history"], budget: "mid", pace: "balanced" };
+const prefs: Prefs = { interests: ["history"], budget: "mid", pace: "balanced", transport: "balanced" };
 
 Deno.test("buildPrompt mentions trip length", () => {
   assertStringIncludes(buildPrompt(pois, prefs, 3), "3-day");
