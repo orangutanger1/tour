@@ -46,6 +46,9 @@ export default function Itinerary() {
 
   const activeDay = days.find((d) => d.day === selectedDay) ?? days[0];
 
+  // Marker number = stop's position in the day's order (i+1), kept even when a
+  // stop lacks coords — so numbers match the route polyline (drawn in stop order) and the
+  // numbered list. Renumbering the filtered set would desync markers from the route/list.
   const dayMarkers = (activeDay?.stops ?? []).flatMap((s, i) => {
     const coord = coords[s.placeId];
     if (!coord) return [];
