@@ -5,7 +5,7 @@ import { Picker } from "@react-native-picker/picker";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import {
-  INTERESTS, MAX_TRIP_DAYS, stateFromProfile, canContinue, buildRequest,
+  INTERESTS, MAX_TRIP_DAYS, stateFromProfile, stateFromRequest, canContinue, buildRequest,
   type OnboardingState,
 } from "../../lib/onboarding";
 import { getProfile } from "../../lib/profile";
@@ -41,11 +41,18 @@ export default function Onboarding() {
   const { session } = useAuth();
   const tripFlow = useTripFlow();
   const [step, setStep] = useState(0);
-  const [state, setState] = useState<OnboardingState>(stateFromProfile(null));
+  // Rehydrate an in-progress trip across remounts (e.g. "Edit trip" after a failed
+  // generate does router.replace, which remounts this screen). lastRequest/pendingRequest
+  // live in TripFlowProvider (above the Stack), so they survive the remount.
+  const seedRequest = tripFlow.lastRequest ?? tripFlow.pendingRequest;
+  const [state, setState] = useState<OnboardingState>(
+    seedRequest ? stateFromRequest(seedRequest) : stateFromProfile(null),
+  );
   const [suggestions, setSuggestions] = useState<{ text: string; placeId: string }[]>([]);
   const debouncedLocation = useDebouncedValue(state.location, 300);
 
   useEffect(() => {
+    if (seedRequest) return; // editing an existing trip — don't clobber it with profile defaults
     getProfile(supabase).then((prefs) => setState(stateFromProfile(prefs))).catch(() => {});
   }, []);
 
