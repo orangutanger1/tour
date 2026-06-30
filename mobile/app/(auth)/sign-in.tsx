@@ -40,8 +40,10 @@ export default function SignIn() {
         <View className="w-16 h-16 rounded-xl bg-accent items-center justify-center">
           <Text variant="title" className="text-ink-inverse">T</Text>
         </View>
-        <Text variant="display" className="text-center">Almost there</Text>
-        <Text variant="body" className="text-center text-ink-muted">Sign in to save your trip and pick up anywhere.</Text>
+        <Text variant="display" className="text-center">{pendingRequest ? "Almost there" : "Welcome back"}</Text>
+        <Text variant="body" className="text-center text-ink-muted">
+          {pendingRequest ? "Sign in to save your trip and pick up anywhere." : "Sign in to see your trips and pick up anywhere."}
+        </Text>
       </View>
 
       <View className="gap-3 pb-2">
