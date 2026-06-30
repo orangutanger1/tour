@@ -1,4 +1,4 @@
-import { getProfile, upsertProfile } from "./profile";
+import { getProfile, upsertProfile, getGalleryStyle } from "./profile";
 import type { Prefs } from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -54,4 +54,24 @@ test("upsertProfile throws when not authenticated", async () => {
 test("upsertProfile throws on upsert error", async () => {
   const client = fakeClient({ upsertResult: { error: { message: "no" } } });
   await expect(upsertProfile(client, prefs)).rejects.toBeTruthy();
+});
+
+function styleClient(default_prefs: unknown): SupabaseClient {
+  return {
+    auth: { getUser: async () => ({ data: { user: { id: "u1" } } }) },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { default_prefs }, error: null }) }) }) }),
+  } as unknown as SupabaseClient;
+}
+
+test("getGalleryStyle returns stored clean", async () => {
+  expect(await getGalleryStyle(styleClient({ galleryStyle: "clean" }))).toBe("clean");
+});
+
+test("getGalleryStyle defaults to polaroid when absent", async () => {
+  expect(await getGalleryStyle(styleClient({}))).toBe("polaroid");
+});
+
+test("getGalleryStyle defaults to polaroid when no user", async () => {
+  const client = { auth: { getUser: async () => ({ data: { user: null } }) } } as unknown as SupabaseClient;
+  expect(await getGalleryStyle(client)).toBe("polaroid");
 });
