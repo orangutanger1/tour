@@ -12,7 +12,9 @@
       "bundleIdentifier": "com.tour.local",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Add your travel photos to your passport.",
+        "NSCameraUsageDescription": "Take a photo to add to your passport."
       }
     },
     "android": {
