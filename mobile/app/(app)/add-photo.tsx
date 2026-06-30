@@ -1,6 +1,6 @@
 // mobile/app/(app)/add-photo.tsx
 import { useState } from "react";
-import { View, ScrollView, Image } from "react-native";
+import { View, ScrollView, Image, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -51,8 +51,9 @@ export default function AddPhoto() {
       });
       qc.invalidateQueries({ queryKey: ["photos"] });
       router.back();
-    } finally {
+    } catch (e) {
       setBusy(false);
+      Alert.alert("Upload failed", "Please try again.");
     }
   }
 
