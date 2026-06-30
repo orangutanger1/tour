@@ -27,7 +27,11 @@ export function PhotoStack({ photos, style, onPress }: {
           style={{ transform: [{ rotate: `${ANGLES[i % ANGLES.length]}deg` }], zIndex: i, elevation: i }}
           className={`absolute rounded-md bg-white shadow-lg ${style === "polaroid" ? "p-2 pb-6" : "p-0.5"}`}
         >
-          <Image source={{ uri: photo.url }} className="w-32 h-32 rounded-sm" />
+          {photo.url ? (
+            <Image source={{ uri: photo.url }} className="w-32 h-32 rounded-sm" />
+          ) : (
+            <View className="w-32 h-32 rounded-sm bg-surface" />
+          )}
           {style === "polaroid" && photo.caption ? (
             <Text className="text-[10px] text-ink-muted text-center mt-1" numberOfLines={1}>
               {photo.caption}

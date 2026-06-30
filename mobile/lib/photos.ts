@@ -8,6 +8,7 @@ export interface PhotoRow {
   placeName: string;
   caption: string | null;
   sortOrder: number;
+  isFavorite: boolean;
   storagePath: string;
   createdAt: string;
 }
@@ -70,21 +71,22 @@ export const BUCKET = "trip-photos";
 
 interface PhotoDbRow {
   id: string; trip_id: string; place_id: string; place_name: string;
-  caption: string | null; sort_order: number; storage_path: string; created_at: string;
+  caption: string | null; sort_order: number; is_favorite: boolean;
+  storage_path: string; created_at: string;
 }
 
 function rowToPhoto(r: PhotoDbRow): PhotoRow {
   return {
     id: r.id, tripId: r.trip_id, placeId: r.place_id, placeName: r.place_name,
-    caption: r.caption, sortOrder: r.sort_order, storagePath: r.storage_path,
-    createdAt: r.created_at,
+    caption: r.caption, sortOrder: r.sort_order, isFavorite: !!r.is_favorite,
+    storagePath: r.storage_path, createdAt: r.created_at,
   };
 }
 
 export async function listPhotos(client: SupabaseClient): Promise<PhotoRow[]> {
   const { data, error } = await client
     .from("trip_photos")
-    .select("id, trip_id, place_id, place_name, caption, sort_order, storage_path, created_at")
+    .select("id, trip_id, place_id, place_name, caption, sort_order, is_favorite, storage_path, created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return ((data ?? []) as PhotoDbRow[]).map(rowToPhoto);
@@ -99,6 +101,14 @@ export async function signedUrls(
   const out: Record<string, string> = {};
   for (const item of data ?? []) if (item.signedUrl && item.path) out[item.path] = item.signedUrl;
   return out;
+}
+
+// One signed URL, cached per-path by the caller so add/delete/reorder don't churn
+// every image's token (which would make <Image> re-download). 1h expiry.
+export async function signedUrl(client: SupabaseClient, path: string): Promise<string> {
+  const { data, error } = await client.storage.from(BUCKET).createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 // ponytail: filename id — not crypto-grade, only needs to be unique per upload.
@@ -161,6 +171,13 @@ export async function updateCaption(
   client: SupabaseClient, id: string, caption: string | null,
 ): Promise<void> {
   const { error } = await client.from("trip_photos").update({ caption }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function toggleFavorite(
+  client: SupabaseClient, id: string, value: boolean,
+): Promise<void> {
+  const { error } = await client.from("trip_photos").update({ is_favorite: value }).eq("id", id);
   if (error) throw error;
 }
 

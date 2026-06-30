@@ -2,14 +2,14 @@
 import { View, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { AppleMaps } from "expo-maps";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueries } from "@tanstack/react-query";
 import { useAuth } from "../../../lib/auth";
 import { supabase } from "../../../lib/supabase";
 import { getStopCoords } from "../../../lib/poi";
 import { getGalleryStyle } from "../../../lib/profile";
 import { listTrips } from "../../../lib/trips";
 import {
-  listPhotos, signedUrls, groupByAlbum, distinctPlaceIds, coverPhoto, clusterPins,
+  listPhotos, signedUrl, groupByAlbum, distinctPlaceIds, coverPhoto, clusterPins,
 } from "../../../lib/photos";
 import { Screen, Text, Button, Loading, EmptyState, AlbumSection, type StackPhoto } from "../../../components/ui";
 
@@ -31,10 +31,18 @@ export default function Passport() {
     queryFn: () => getStopCoords(supabase, distinctPlaceIds(photos)),
     enabled: photos.length > 0,
   });
-  const urlsQ = useQuery({
-    queryKey: ["photoUrls", photos.map((p) => p.storagePath)],
-    queryFn: () => signedUrls(supabase, photos.map((p) => p.storagePath)),
-    enabled: photos.length > 0,
+  const urls = useQueries({
+    queries: photos.map((p) => ({
+      queryKey: ["photoUrl", p.storagePath],
+      queryFn: () => signedUrl(supabase, p.storagePath),
+      staleTime: 50 * 60_000,
+      enabled: !!p.storagePath,
+    })),
+    combine: (res) => {
+      const m: Record<string, string> = {};
+      photos.forEach((p, i) => { const u = res[i]?.data; if (u) m[p.storagePath] = u; });
+      return m;
+    },
   });
 
   if (!session) {
@@ -46,7 +54,6 @@ export default function Passport() {
   }
 
   const style = styleQ.data ?? "polaroid";
-  const urls = urlsQ.data ?? {};
   const coords = coordsQ.data ?? {};
   const tripName = (id: string) => tripsQ.data?.find((t) => t.id === id)?.location ?? "Trip";
 

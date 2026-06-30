@@ -1,13 +1,14 @@
 import {
   groupByAlbum, distinctPlaceIds, coverPhoto, nextSortOrder, clusterPins,
-  type PhotoRow, addPhoto, base64ToBytes, listPhotos, signedUrls,
+  type PhotoRow, addPhoto, base64ToBytes, listPhotos, signedUrls, toggleFavorite,
 } from "./photos";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 function p(over: Partial<PhotoRow>): PhotoRow {
   return {
     id: "id", tripId: "t1", placeId: "pl", placeName: "Place", caption: null,
-    sortOrder: 0, storagePath: "u/t/x.jpg", createdAt: "2026-06-01T00:00:00Z", ...over,
+    sortOrder: 0, isFavorite: false, storagePath: "u/t/x.jpg",
+    createdAt: "2026-06-01T00:00:00Z", ...over,
   };
 }
 
@@ -55,7 +56,7 @@ test("clusterPins buckets pins into a grid and averages centers", () => {
 
 const dbRow = {
   id: "ph1", trip_id: "t1", place_id: "pl1", place_name: "Senso-ji",
-  caption: "torii", sort_order: 2, storage_path: "u/t1/x.jpg",
+  caption: "torii", sort_order: 2, is_favorite: true, storage_path: "u/t1/x.jpg",
   created_at: "2026-06-01T00:00:00Z",
 };
 
@@ -67,9 +68,19 @@ test("listPhotos maps db rows to PhotoRow", async () => {
   const rows = await listPhotos(listClient({ data: [dbRow], error: null }));
   expect(rows[0]).toEqual({
     id: "ph1", tripId: "t1", placeId: "pl1", placeName: "Senso-ji",
-    caption: "torii", sortOrder: 2, storagePath: "u/t1/x.jpg",
+    caption: "torii", sortOrder: 2, isFavorite: true, storagePath: "u/t1/x.jpg",
     createdAt: "2026-06-01T00:00:00Z",
   });
+});
+
+test("toggleFavorite updates is_favorite for the id", async () => {
+  let updated: unknown; let whereId: string | undefined;
+  const client = { from: () => ({
+    update: (patch: unknown) => { updated = patch; return { eq: async (_c: string, v: string) => { whereId = v; return { error: null }; } }; },
+  }) } as unknown as SupabaseClient;
+  await toggleFavorite(client, "ph1", true);
+  expect(updated).toEqual({ is_favorite: true });
+  expect(whereId).toBe("ph1");
 });
 
 test("listPhotos throws on error", async () => {

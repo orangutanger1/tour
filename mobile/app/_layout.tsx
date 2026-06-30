@@ -14,7 +14,11 @@ import {
 import { AuthProvider } from "../lib/auth";
 import { TripFlowProvider } from "../lib/tripFlow";
 
-const queryClient = new QueryClient();
+// staleTime keeps remounts (e.g. tab back to Passport) from refetching everything.
+// Mutations that change data invalidate their keys explicitly.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false } },
+});
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
