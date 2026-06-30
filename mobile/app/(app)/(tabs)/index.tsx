@@ -1,30 +1,85 @@
-// mobile/app/(app)/index.tsx
-import { View, Pressable } from "react-native";
+// mobile/app/(app)/(tabs)/index.tsx
+import { View, Pressable, FlatList } from "react-native";
 import { useRouter } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../../lib/auth";
-import { Screen, Text, Button } from "../../../components/ui";
+import { supabase } from "../../../lib/supabase";
+import { listTrips, type TripSummary } from "../../../lib/trips";
+import { Screen, Text, Button, TripCard, EmptyState, Loading } from "../../../components/ui";
 
-export default function Home() {
+export default function Trips() {
   const { user, session } = useAuth();
   const router = useRouter();
   const initial = (user?.email ?? "?").charAt(0).toUpperCase();
-  return (
-    <Screen>
-      <View className="flex-row justify-end">
+
+  const { data: trips, isLoading, isError, refetch } = useQuery({
+    queryKey: ["trips"],
+    queryFn: () => listTrips(supabase),
+    enabled: !!session,
+  });
+
+  function Header() {
+    return (
+      <View className="flex-row items-center justify-between mb-4">
+        <Text variant="title">Your trips</Text>
         {session ? (
-          <Pressable onPress={() => router.push("/account")}
-            className="w-10 h-10 rounded-pill bg-accent-soft items-center justify-center">
+          <Pressable
+            onPress={() => router.push("/account")}
+            className="w-10 h-10 rounded-pill bg-accent-soft items-center justify-center"
+          >
             <Text variant="label" className="text-accent">{initial}</Text>
           </Pressable>
         ) : null}
       </View>
-      <View className="flex-1 justify-center gap-3">
-        <Text variant="display">Where to next?</Text>
-        <Text variant="body" className="text-ink-muted">
-          Tell us your vibe and we'll plan a local-feel trip, day by day.
-        </Text>
-      </View>
-      <View className="pb-2">
+    );
+  }
+
+  if (isLoading) {
+    return <Screen><Loading label="Loading your trips…" /></Screen>;
+  }
+
+  if (isError) {
+    return (
+      <Screen>
+        <Header />
+        <EmptyState
+          title="Couldn't load your trips"
+          subtitle="Check your connection and try again."
+          action={<Button title="Retry" onPress={() => refetch()} />}
+        />
+      </Screen>
+    );
+  }
+
+  if (!trips || trips.length === 0) {
+    return (
+      <Screen>
+        <Header />
+        <View className="flex-1 justify-center gap-3">
+          <Text variant="display">Where to next?</Text>
+          <Text variant="body" className="text-ink-muted">
+            Tell us your vibe and we'll plan a local-feel trip, day by day.
+          </Text>
+        </View>
+        <View className="pb-2">
+          <Button title="Plan a trip" onPress={() => router.push("/onboarding")} />
+        </View>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen>
+      <Header />
+      <FlatList
+        data={trips}
+        keyExtractor={(t: TripSummary) => t.id}
+        contentContainerClassName="gap-3 pb-24"
+        renderItem={({ item }) => (
+          <TripCard trip={item} onPress={() => router.push({ pathname: "/itinerary", params: { tripId: item.id } })} />
+        )}
+      />
+      <View className="absolute left-6 right-6 bottom-6">
         <Button title="Plan a trip" onPress={() => router.push("/onboarding")} />
       </View>
     </Screen>
