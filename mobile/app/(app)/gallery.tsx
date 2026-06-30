@@ -71,7 +71,7 @@ export default function Gallery() {
 
       {photos.length === 0 ? (
         <EmptyState title="No photos yet" subtitle="Add your first one from this trip."
-          action={<Button title="Add photo" onPress={() => router.push({ pathname: "/add-photo" as never, params: { tripId } })} />} />
+          action={<Button title="Add photo" onPress={() => router.push({ pathname: "/add-photo", params: { tripId } })} />} />
       ) : (
         <ScrollView contentContainerClassName="flex-row flex-wrap gap-2 pb-24">
           {photos.map((photo, i) => (
@@ -95,7 +95,7 @@ export default function Gallery() {
 
       {photos.length > 0 ? (
         <View className="absolute left-6 right-6 bottom-6">
-          <Button title="Add photo" onPress={() => router.push({ pathname: "/add-photo" as never, params: { tripId } })} />
+          <Button title="Add photo" onPress={() => router.push({ pathname: "/add-photo", params: { tripId } })} />
         </View>
       ) : null}
 
