@@ -51,3 +51,45 @@ test("clusterPins buckets pins into a grid and averages centers", () => {
   expect(tokyo.ids.sort()).toEqual(["a", "b"]);
   expect(tokyo.lat).toBeCloseTo(35.015, 3);
 });
+
+import { listPhotos, signedUrls } from "./photos";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+const dbRow = {
+  id: "ph1", trip_id: "t1", place_id: "pl1", place_name: "Senso-ji",
+  caption: "torii", sort_order: 2, storage_path: "u/t1/x.jpg",
+  created_at: "2026-06-01T00:00:00Z",
+};
+
+function listClient(result: { data: unknown; error: unknown }): SupabaseClient {
+  return { from: () => ({ select: () => ({ order: async () => result }) }) } as unknown as SupabaseClient;
+}
+
+test("listPhotos maps db rows to PhotoRow", async () => {
+  const rows = await listPhotos(listClient({ data: [dbRow], error: null }));
+  expect(rows[0]).toEqual({
+    id: "ph1", tripId: "t1", placeId: "pl1", placeName: "Senso-ji",
+    caption: "torii", sortOrder: 2, storagePath: "u/t1/x.jpg",
+    createdAt: "2026-06-01T00:00:00Z",
+  });
+});
+
+test("listPhotos throws on error", async () => {
+  await expect(listPhotos(listClient({ data: null, error: { message: "x" } }))).rejects.toBeTruthy();
+});
+
+test("signedUrls returns {} for empty input without calling storage", async () => {
+  const client = { storage: { from: () => { throw new Error("should not be called"); } } } as unknown as SupabaseClient;
+  expect(await signedUrls(client, [])).toEqual({});
+});
+
+test("signedUrls maps path to signedUrl", async () => {
+  const client = {
+    storage: { from: () => ({
+      createSignedUrls: async () => ({
+        data: [{ path: "u/t1/x.jpg", signedUrl: "https://signed/x" }], error: null,
+      }),
+    }) },
+  } as unknown as SupabaseClient;
+  expect(await signedUrls(client, ["u/t1/x.jpg"])).toEqual({ "u/t1/x.jpg": "https://signed/x" });
+});

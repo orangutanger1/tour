@@ -65,3 +65,38 @@ export function clusterPins(pins: Pin[], cellDeg: number): Cluster[] {
     ids: group.map((pin) => pin.id),
   }));
 }
+
+export const BUCKET = "trip-photos";
+
+interface PhotoDbRow {
+  id: string; trip_id: string; place_id: string; place_name: string;
+  caption: string | null; sort_order: number; storage_path: string; created_at: string;
+}
+
+function rowToPhoto(r: PhotoDbRow): PhotoRow {
+  return {
+    id: r.id, tripId: r.trip_id, placeId: r.place_id, placeName: r.place_name,
+    caption: r.caption, sortOrder: r.sort_order, storagePath: r.storage_path,
+    createdAt: r.created_at,
+  };
+}
+
+export async function listPhotos(client: SupabaseClient): Promise<PhotoRow[]> {
+  const { data, error } = await client
+    .from("trip_photos")
+    .select("id, trip_id, place_id, place_name, caption, sort_order, storage_path, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return ((data ?? []) as PhotoDbRow[]).map(rowToPhoto);
+}
+
+export async function signedUrls(
+  client: SupabaseClient, paths: string[],
+): Promise<Record<string, string>> {
+  if (paths.length === 0) return {};
+  const { data, error } = await client.storage.from(BUCKET).createSignedUrls(paths, 3600);
+  if (error) throw error;
+  const out: Record<string, string> = {};
+  for (const item of data ?? []) if (item.signedUrl) out[item.path] = item.signedUrl;
+  return out;
+}
