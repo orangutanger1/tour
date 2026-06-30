@@ -12,6 +12,7 @@ import {
   PlusJakartaSans_800ExtraBold,
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { AuthProvider } from "../lib/auth";
+import { TripFlowProvider } from "../lib/tripFlow";
 
 const queryClient = new QueryClient();
 
@@ -30,7 +31,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <Slot />
+          <TripFlowProvider>
+            <Slot />
+          </TripFlowProvider>
         </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

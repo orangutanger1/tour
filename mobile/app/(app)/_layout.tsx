@@ -1,11 +1,8 @@
 // mobile/app/(app)/_layout.tsx
+// TripFlowProvider lives at the root (app/_layout.tsx) so it also wraps the
+// (auth) group — sign-in resumes a pending trip via useTripFlow.
 import { Stack } from "expo-router";
-import { TripFlowProvider } from "../../lib/tripFlow";
 
 export default function AppLayout() {
-  return (
-    <TripFlowProvider>
-      <Stack screenOptions={{ headerShown: false }} />
-    </TripFlowProvider>
-  );
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
