@@ -16,3 +16,6 @@ node_modules/
 # OS / editor
 .DS_Store
 *.log
+
+# visual brainstorm companion
+.superpowers/
