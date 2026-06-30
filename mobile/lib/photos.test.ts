@@ -1,7 +1,8 @@
 import {
   groupByAlbum, distinctPlaceIds, coverPhoto, nextSortOrder, clusterPins,
-  type PhotoRow,
+  type PhotoRow, addPhoto, base64ToBytes, listPhotos, signedUrls,
 } from "./photos";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 function p(over: Partial<PhotoRow>): PhotoRow {
   return {
@@ -52,9 +53,6 @@ test("clusterPins buckets pins into a grid and averages centers", () => {
   expect(tokyo.lat).toBeCloseTo(35.015, 3);
 });
 
-import { listPhotos, signedUrls } from "./photos";
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 const dbRow = {
   id: "ph1", trip_id: "t1", place_id: "pl1", place_name: "Senso-ji",
   caption: "torii", sort_order: 2, storage_path: "u/t1/x.jpg",
@@ -92,4 +90,46 @@ test("signedUrls maps path to signedUrl", async () => {
     }) },
   } as unknown as SupabaseClient;
   expect(await signedUrls(client, ["u/t1/x.jpg"])).toEqual({ "u/t1/x.jpg": "https://signed/x" });
+});
+
+test("base64ToBytes decodes a known string", () => {
+  // "Man" => TWFu
+  expect(Array.from(base64ToBytes("TWFu"))).toEqual([77, 97, 110]);
+});
+
+function uploadSpyClient(opts: { uploadError?: unknown; insertError?: unknown }) {
+  const calls: string[] = [];
+  const removed: string[][] = [];
+  const client = {
+    auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+    storage: { from: () => ({
+      upload: async () => { calls.push("upload"); return { error: opts.uploadError ?? null }; },
+      remove: async (paths: string[]) => { calls.push("remove"); removed.push(paths); return { error: null }; },
+    }) },
+    from: () => ({
+      select: () => ({ eq: async () => ({ data: [{ sort_order: 0 }, { sort_order: 1 }], error: null }) }),
+      insert: async () => { calls.push("insert"); return { error: opts.insertError ?? null }; },
+    }),
+  } as unknown as SupabaseClient;
+  return { client, calls, removed };
+}
+
+const addArgs = { tripId: "t1", placeId: "pl1", placeName: "Senso-ji", caption: null, base64: "TWFu" };
+
+test("addPhoto uploads before inserting", async () => {
+  const { client, calls } = uploadSpyClient({});
+  await addPhoto(client, addArgs);
+  expect(calls).toEqual(["upload", "insert"]);
+});
+
+test("addPhoto does not insert when upload fails", async () => {
+  const { client, calls } = uploadSpyClient({ uploadError: { message: "up" } });
+  await expect(addPhoto(client, addArgs)).rejects.toBeTruthy();
+  expect(calls).toEqual(["upload"]);
+});
+
+test("addPhoto rolls back the object when insert fails", async () => {
+  const { client, calls } = uploadSpyClient({ insertError: { message: "ins" } });
+  await expect(addPhoto(client, addArgs)).rejects.toBeTruthy();
+  expect(calls).toEqual(["upload", "insert", "remove"]);
 });

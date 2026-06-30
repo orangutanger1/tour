@@ -97,6 +97,77 @@ export async function signedUrls(
   const { data, error } = await client.storage.from(BUCKET).createSignedUrls(paths, 3600);
   if (error) throw error;
   const out: Record<string, string> = {};
-  for (const item of data ?? []) if (item.signedUrl) out[item.path] = item.signedUrl;
+  for (const item of data ?? []) if (item.signedUrl && item.path) out[item.path] = item.signedUrl;
   return out;
+}
+
+// ponytail: filename id — not crypto-grade, only needs to be unique per upload.
+function uid(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// ponytail: hand-rolled base64 decode — React Native has no atob, and this saves
+// a dependency for the one place we need raw bytes (storage upload).
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+export function base64ToBytes(b64: string): Uint8Array {
+  const clean = b64.replace(/=+$/, "");
+  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
+  let bits = 0, value = 0, idx = 0;
+  for (const ch of clean) {
+    value = (value << 6) | B64.indexOf(ch);
+    bits += 6;
+    if (bits >= 8) { bits -= 8; out[idx++] = (value >> bits) & 0xff; }
+  }
+  return out;
+}
+
+export async function addPhoto(
+  client: SupabaseClient,
+  args: { tripId: string; placeId: string; placeName: string; caption: string | null; base64: string },
+): Promise<void> {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) throw new Error("not authenticated");
+  const path = `${user.id}/${args.tripId}/${uid()}.jpg`;
+
+  const { error: upErr } = await client.storage
+    .from(BUCKET)
+    .upload(path, base64ToBytes(args.base64), { contentType: "image/jpeg" });
+  if (upErr) throw upErr; // no row without a successful upload
+
+  const { data: existing } = await client
+    .from("trip_photos").select("sort_order").eq("trip_id", args.tripId);
+  const sortOrder = nextSortOrder(
+    ((existing ?? []) as { sort_order: number }[]).map((r) => ({ sortOrder: r.sort_order })),
+  );
+
+  const { error: insErr } = await client.from("trip_photos").insert({
+    user_id: user.id, trip_id: args.tripId, place_id: args.placeId,
+    place_name: args.placeName, caption: args.caption, sort_order: sortOrder,
+    storage_path: path,
+  });
+  if (insErr) {
+    await client.storage.from(BUCKET).remove([path]); // roll back the orphan
+    throw insErr;
+  }
+}
+
+export async function deletePhoto(client: SupabaseClient, photo: PhotoRow): Promise<void> {
+  const { error } = await client.from("trip_photos").delete().eq("id", photo.id);
+  if (error) throw error;
+  await client.storage.from(BUCKET).remove([photo.storagePath]); // best-effort cleanup
+}
+
+export async function updateCaption(
+  client: SupabaseClient, id: string, caption: string | null,
+): Promise<void> {
+  const { error } = await client.from("trip_photos").update({ caption }).eq("id", id);
+  if (error) throw error;
+}
+
+// ponytail: N sequential updates — fine for album-sized lists; batch via RPC if albums get huge.
+export async function reorderPhotos(client: SupabaseClient, orderedIds: string[]): Promise<void> {
+  for (let i = 0; i < orderedIds.length; i++) {
+    const { error } = await client.from("trip_photos").update({ sort_order: i }).eq("id", orderedIds[i]);
+    if (error) throw error;
+  }
 }
