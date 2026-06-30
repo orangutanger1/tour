@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { View, ScrollView, FlatList, Image, Pressable, Modal, TextInput, Dimensions } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
+import Sortable from "react-native-sortables";
 import { supabase } from "../../lib/supabase";
 import { listTrips } from "../../lib/trips";
 import {
@@ -43,18 +44,12 @@ export default function Gallery() {
   const title = tripsQ.data?.find((t) => t.id === tripId)?.location ?? "Album";
   const refresh = () => qc.invalidateQueries({ queryKey: ["photos"] });
 
-  async function move(index: number, dir: -1 | 1) {
-    const ids = photos.map((p) => p.id);
-    const j = index + dir;
-    if (j < 0 || j >= ids.length) return;
-    [ids[index], ids[j]] = [ids[j], ids[index]];
-    await reorderPhotos(supabase, ids);
+  async function makeCoverId(id: string) {
+    await reorderPhotos(supabase, [id, ...photos.map((p) => p.id).filter((x) => x !== id)]);
     refresh();
   }
-  async function makeCover(index: number) {
-    const ids = photos.map((p) => p.id);
-    const [picked] = ids.splice(index, 1);
-    await reorderPhotos(supabase, [picked, ...ids]);
+  async function commitOrder(ordered: PhotoRow[]) {
+    await reorderPhotos(supabase, ordered.map((p) => p.id));
     refresh();
   }
   async function favorite(photo: PhotoRow) {
@@ -88,42 +83,36 @@ export default function Gallery() {
       {photos.length === 0 ? (
         <EmptyState title="No photos yet" subtitle="Add your first one from this trip."
           action={<Button title="Add photo" onPress={() => router.push({ pathname: "/add-photo", params: { tripId } })} />} />
+      ) : editing ? (
+        <View className="flex-1">
+          <Text variant="caption" className="text-ink-muted mb-2">Hold a photo to drag it into place.</Text>
+          <Sortable.Grid
+            columns={3}
+            data={photos}
+            keyExtractor={(p) => p.id}
+            rowGap={8}
+            columnGap={8}
+            onDragEnd={({ data }) => commitOrder(data)}
+            renderItem={({ item, index }) => (
+              <View>
+                <Thumb url={urls[item.storagePath]} isCover={index === 0} isFavorite={item.isFavorite}
+                  onOpen={() => setLightboxIndex(index)} onFavorite={() => favorite(item)} />
+                <Button title="Cover" variant="ghost" size="sm" onPress={() => makeCoverId(item.id)} />
+              </View>
+            )}
+          />
+        </View>
       ) : (
         <ScrollView contentContainerClassName="flex-row flex-wrap gap-2 pb-24">
-          {photos.map((photo, i) => {
-            const url = urls[photo.storagePath];
-            return (
-              <View key={photo.id} className="w-[31%]">
-                <Pressable onPress={() => setLightboxIndex(i)}>
-                  {url ? (
-                    <Image source={{ uri: url }} className="w-full aspect-square rounded-lg bg-surface" />
-                  ) : (
-                    <View className="w-full aspect-square rounded-lg bg-surface" />
-                  )}
-                  {i === 0 ? (
-                    <View className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-black/45">
-                      <Text className="text-[10px] text-white">Cover</Text>
-                    </View>
-                  ) : null}
-                  <Pressable onPress={() => favorite(photo)} hitSlop={8}
-                    className="absolute bottom-1 right-1 w-7 h-7 rounded-full items-center justify-center bg-black/40">
-                    <Text className={`text-[15px] ${photo.isFavorite ? "text-[#FFD43B]" : "text-white"}`}>
-                      {photo.isFavorite ? "★" : "☆"}
-                    </Text>
-                  </Pressable>
-                </Pressable>
-                {editing ? (
-                  <View className="flex-row items-center justify-between mt-1">
-                    <Button title="↑" variant="ghost" size="sm" onPress={() => move(i, -1)} />
-                    <Button title="Cover" variant="ghost" size="sm" onPress={() => makeCover(i)} />
-                    <Button title="↓" variant="ghost" size="sm" onPress={() => move(i, 1)} />
-                  </View>
-                ) : photo.caption ? (
-                  <Text variant="caption" numberOfLines={1} className="mt-1">{photo.caption}</Text>
-                ) : null}
-              </View>
-            );
-          })}
+          {photos.map((photo, i) => (
+            <View key={photo.id} className="w-[31%]">
+              <Thumb url={urls[photo.storagePath]} isCover={i === 0} isFavorite={photo.isFavorite}
+                onOpen={() => setLightboxIndex(i)} onFavorite={() => favorite(photo)} />
+              {photo.caption ? (
+                <Text variant="caption" numberOfLines={1} className="mt-1">{photo.caption}</Text>
+              ) : null}
+            </View>
+          ))}
         </ScrollView>
       )}
 
@@ -137,6 +126,29 @@ export default function Gallery() {
         onClose={() => setLightboxIndex(null)} onDelete={remove}
         onSaveCaption={saveCaption} onFavorite={favorite} />
     </Screen>
+  );
+}
+
+function Thumb({ url, isCover, isFavorite, onOpen, onFavorite }: {
+  url?: string; isCover: boolean; isFavorite: boolean; onOpen: () => void; onFavorite: () => void;
+}) {
+  return (
+    <Pressable onPress={onOpen}>
+      {url ? (
+        <Image source={{ uri: url }} className="w-full aspect-square rounded-lg bg-surface" />
+      ) : (
+        <View className="w-full aspect-square rounded-lg bg-surface" />
+      )}
+      {isCover ? (
+        <View className="absolute top-1 left-1 px-1.5 py-0.5 rounded-full bg-black/45">
+          <Text className="text-[10px] text-white">Cover</Text>
+        </View>
+      ) : null}
+      <Pressable onPress={onFavorite} hitSlop={8}
+        className="absolute bottom-1 right-1 w-7 h-7 rounded-full items-center justify-center bg-black/40">
+        <Text className={`text-[15px] ${isFavorite ? "text-[#FFD43B]" : "text-white"}`}>{isFavorite ? "★" : "☆"}</Text>
+      </Pressable>
+    </Pressable>
   );
 }
 
