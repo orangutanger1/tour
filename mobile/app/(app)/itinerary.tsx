@@ -2,15 +2,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, SectionList, Pressable } from "react-native";
 import { AppleMaps } from "expo-maps";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
+import { getTrip } from "../../lib/trips";
 import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
-import { Screen, Text, Button, Card, EmptyState } from "../../components/ui";
+import { Screen, Text, Button, Card, EmptyState, Loading } from "../../components/ui";
 
 export default function Itinerary() {
-  const { data } = useTripFlow();
   const router = useRouter();
+  const { tripId } = useLocalSearchParams<{ tripId?: string }>();
+  const flow = useTripFlow();
+
+  const tripQuery = useQuery({
+    queryKey: ["trip", tripId],
+    queryFn: () => getTrip(supabase, tripId as string),
+    enabled: !!tripId,
+  });
+
+  // When opened from a saved trip use the DB row; otherwise the just-generated flow.
+  const data = tripId ? (tripQuery.data ?? undefined) : flow.data;
+
   const [view, setView] = useState<"list" | "map">("list");
   const [coords, setCoords] = useState<Record<string, StopCoord>>({});
   const [selectedDay, setSelectedDay] = useState(1);
@@ -31,6 +44,22 @@ export default function Itinerary() {
   useEffect(() => {
     if (placeIds.length) getStopCoords(supabase, placeIds).then(setCoords).catch(() => {});
   }, [placeIds]);
+
+  if (tripId && tripQuery.isLoading) {
+    return <Screen><Loading label="Loading trip…" /></Screen>;
+  }
+
+  if (tripId && !tripQuery.isLoading && !data) {
+    return (
+      <Screen>
+        <EmptyState
+          title="Trip not found"
+          subtitle="It may have been removed."
+          action={<Button title="Back to trips" onPress={() => router.replace("/")} />}
+        />
+      </Screen>
+    );
+  }
 
   if (empty) {
     return (
