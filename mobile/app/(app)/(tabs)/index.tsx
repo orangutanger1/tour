@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../../lib/auth";
 import { supabase } from "../../../lib/supabase";
 import { listTrips, type TripSummary } from "../../../lib/trips";
+import { listPhotos, signedUrls, groupByAlbum, coverPhoto } from "../../../lib/photos";
 import { Screen, Text, Button, TripCard, EmptyState, Loading } from "../../../components/ui";
 
 export default function Trips() {
@@ -17,6 +18,20 @@ export default function Trips() {
     queryFn: () => listTrips(supabase),
     enabled: !!session,
   });
+
+  const photosQ = useQuery({ queryKey: ["photos"], queryFn: () => listPhotos(supabase), enabled: !!session });
+  const covers = groupByAlbum(photosQ.data ?? [])
+    .map((a) => coverPhoto(a.photos))
+    .filter((p): p is NonNullable<typeof p> => !!p);
+  const coverUrlsQ = useQuery({
+    queryKey: ["coverUrls", covers.map((c) => c.storagePath)],
+    queryFn: () => signedUrls(supabase, covers.map((c) => c.storagePath)),
+    enabled: covers.length > 0,
+  });
+  const coverFor = (tripId: string) => {
+    const cover = covers.find((c) => c.tripId === tripId);
+    return cover ? coverUrlsQ.data?.[cover.storagePath] : undefined;
+  };
 
   if (!session) {
     return (
@@ -93,7 +108,7 @@ export default function Trips() {
         keyExtractor={(t: TripSummary) => t.id}
         contentContainerClassName="gap-3 pb-24"
         renderItem={({ item }) => (
-          <TripCard trip={item} onPress={() => router.push({ pathname: "/itinerary", params: { tripId: item.id } })} />
+          <TripCard trip={item} coverUrl={coverFor(item.id)} onPress={() => router.push({ pathname: "/itinerary", params: { tripId: item.id } })} />
         )}
       />
       <View className="absolute left-6 right-6 bottom-6">
