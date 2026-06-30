@@ -18,6 +18,23 @@ export default function Trips() {
     enabled: !!session,
   });
 
+  if (!session) {
+    return (
+      <Screen>
+        <View className="flex-1 justify-center gap-3">
+          <Text variant="display">Welcome to your trips</Text>
+          <Text variant="body" className="text-ink-muted">
+            Sign in to see your saved trips — or start planning a new one.
+          </Text>
+        </View>
+        <View className="pb-2 gap-3">
+          <Button title="Sign in" onPress={() => router.push("/(auth)/sign-in")} />
+          <Button title="Plan a trip" variant="secondary" onPress={() => router.push("/onboarding")} />
+        </View>
+      </Screen>
+    );
+  }
+
   function Header() {
     return (
       <View className="flex-row items-center justify-between mb-4">
