@@ -85,7 +85,7 @@ export default function Passport() {
               title={tripName(album.tripId)}
               photos={cover ? [{ id: cover.id, url: urls[cover.storagePath] ?? "", caption: cover.caption }, ...toStack(album).filter((s) => s.id !== cover.id)] : toStack(album)}
               style={style}
-              onOpen={() => router.push({ pathname: "/gallery" as never, params: { tripId: album.tripId } })}
+              onOpen={() => router.push({ pathname: "/gallery", params: { tripId: album.tripId } })}
             />
           );
         })}
