@@ -22,21 +22,29 @@ Deno.test("first attraction starts at 9:00 AM and times are strictly increasing"
   for (let i = 1; i < mins.length; i++) assert(mins[i] > mins[i - 1], `not increasing at ${i}: ${mins.join(",")}`);
 });
 
-Deno.test("travel time is inflated by the 1.2 buffer", () => {
-  // A dwell 90 -> ends 10:30 (630). B travel 20 -> +round(24) -> 654 = 10:54.
-  const out = buildDaySchedule({ attractions: [att("A", 90), att("B", 60, 20)], sunsetMinutes: 1110, lunch: { ...lunch }, dinner: { ...dinner } });
+Deno.test("travel buffer (1.2) applies between consecutive stops in a packed window", () => {
+  // 8 stops -> morning window gets 3 (proportional), each dwell 90 + travel 20 ->
+  // busy 318 > 210min window -> slack 0 -> back-to-back. A@9:00, B@9:00+90+round(20*1.2=24)=10:54.
+  const atts = ["A", "B", "C", "D", "E", "F", "G", "H"].map((id) => att(id, 90, id === "A" ? undefined : 20));
+  const out = buildDaySchedule({ attractions: atts, sunsetMinutes: 1110, lunch: { ...lunch }, dinner: { ...dinner } });
   const b = out.find((s) => s.placeId === "B")!;
   assertEquals(b.startTime, "10:54 AM");
 });
 
-Deno.test("lunch is inserted at the boundary once the clock reaches noon", () => {
-  // A 9:00 dwell90 ->10:30(630). B travel20 ->654 dwell60 ->714. C travel10 ->726 >=720 -> lunch before C at 12:06.
+Deno.test("lunch is anchored at 12:30 and comes before the afternoon stops", () => {
   const out = buildDaySchedule({ attractions: [att("A", 90), att("B", 60, 20), att("C", 90, 10)], sunsetMinutes: 1110, lunch: { ...lunch }, dinner: { ...dinner } });
   const l = out.find((s) => s.mealSlot === "lunch")!;
   assertEquals(l.kind, "meal-gap");
-  assertEquals(l.startTime, "12:06 PM");
-  // lunch comes before C
+  assertEquals(l.startTime, "12:30 PM");
   assert(out.indexOf(l) < out.findIndex((s) => s.placeId === "C"));
+});
+
+Deno.test("sparse day still places an attraction between lunch and dinner", () => {
+  const out = buildDaySchedule({ attractions: [att("A", 60), att("B", 60, 20), att("C", 60, 20), att("D", 60, 20)], sunsetMinutes: 1170, lunch: { ...lunch }, dinner: { ...dinner } });
+  const lunchMin = toMin(out.find((s) => s.mealSlot === "lunch")!.startTime!);
+  const dinnerMin = toMin(out.find((s) => s.mealSlot === "dinner")!.startTime!);
+  const between = out.filter((s) => !s.mealSlot && s.kind === "attraction" && toMin(s.startTime!) > lunchMin && toMin(s.startTime!) < dinnerMin);
+  assert(between.length >= 1, `expected an attraction between lunch(${lunchMin}) and dinner(${dinnerMin})`);
 });
 
 Deno.test("dinner lands at or after sunset", () => {
@@ -56,6 +64,6 @@ Deno.test("short day still appends both meals at their target times", () => {
   const out = buildDaySchedule({ attractions: [att("A", 30)], sunsetMinutes: 1110, lunch: { ...lunch }, dinner: { ...dinner } });
   const l = out.find((s) => s.mealSlot === "lunch")!;
   const d = out.find((s) => s.mealSlot === "dinner")!;
-  assertEquals(l.startTime, "12:30 PM");          // appended at LUNCH_TARGET_MIN
-  assertEquals(d.startTime, "6:30 PM");            // appended at sunset (1110)
+  assertEquals(l.startTime, "12:30 PM");
+  assertEquals(d.startTime, "6:30 PM");
 });
