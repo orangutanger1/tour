@@ -14,7 +14,7 @@ import { useTripFlow } from "../../lib/tripFlow";
 import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import type { Prefs } from "../../lib/types";
-import { Screen, Text, Button, Chip, Input, Card } from "../../components/ui";
+import { Screen, Text, Button, Chip, Input, Card, Stepper } from "../../components/ui";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -191,13 +191,13 @@ export default function Onboarding() {
               <Chip key={d} label={String(d)} selected={state.tripDays === d} onPress={() => setState((s) => ({ ...s, tripDays: d }))} />
             ))}
           </View>
-          <View className="flex-row items-center gap-3">
-            <Button title="–" variant="secondary" className="w-12" disabled={state.tripDays <= 1}
-              onPress={() => setState((s) => ({ ...s, tripDays: Math.max(1, s.tripDays - 1) }))} />
-            <Text variant="title" className="w-24 text-center">{state.tripDays} {state.tripDays === 1 ? "day" : "days"}</Text>
-            <Button title="+" variant="secondary" className="w-12" disabled={state.tripDays >= MAX_TRIP_DAYS}
-              onPress={() => setState((s) => ({ ...s, tripDays: Math.min(MAX_TRIP_DAYS, s.tripDays + 1) }))} />
-          </View>
+          <Stepper
+            value={state.tripDays}
+            min={1}
+            max={MAX_TRIP_DAYS}
+            suffix={state.tripDays === 1 ? "day" : "days"}
+            onChange={(d) => setState((s) => ({ ...s, tripDays: d }))}
+          />
           <Text variant="label">Starting point (optional)</Text>
           <Input placeholder="Home, airport, or hotel" value={state.startLocation ?? ""}
             onChangeText={(t) => setState((s) => ({ ...s, startLocation: t, startPlaceId: undefined }))} autoCorrect={false} />
