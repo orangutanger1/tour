@@ -8,3 +8,4 @@ export { Input } from "./Input";
 export { ListRow } from "./ListRow";
 export { EmptyState } from "./EmptyState";
 export { Loading } from "./Loading";
+export { TripCard } from "./TripCard";
