@@ -1,8 +1,8 @@
 // mobile/app/(app)/index.tsx
 import { View, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth } from "../../lib/auth";
-import { Screen, Text, Button } from "../../components/ui";
+import { useAuth } from "../../../lib/auth";
+import { Screen, Text, Button } from "../../../components/ui";
 
 export default function Home() {
   const { user, session } = useAuth();
