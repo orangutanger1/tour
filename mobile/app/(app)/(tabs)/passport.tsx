@@ -11,7 +11,7 @@ import { listTrips } from "../../../lib/trips";
 import {
   listPhotos, signedUrls, groupByAlbum, distinctPlaceIds, coverPhoto, clusterPins,
 } from "../../../lib/photos";
-import { Screen, Text, Loading, EmptyState, AlbumSection, type StackPhoto } from "../../../components/ui";
+import { Screen, Text, Button, Loading, EmptyState, AlbumSection, type StackPhoto } from "../../../components/ui";
 
 // ponytail: one cell size for the small header map. Make it zoom-reactive later if needed.
 const CELL_DEG = 0.5;
@@ -42,7 +42,7 @@ export default function Passport() {
   }
   if (photosQ.isLoading) return <Screen><Loading label="Opening your passport…" /></Screen>;
   if (photos.length === 0) {
-    return <Screen><EmptyState title="Passport" subtitle="Add photos from your trips and they'll collect here as albums." /></Screen>;
+    return <Screen><EmptyState title="Passport" subtitle="Add photos from your trips and they'll collect here as albums." action={<Button title="Add a photo" onPress={() => router.push("/add-photo")} />} /></Screen>;
   }
 
   const style = styleQ.data ?? "polaroid";
@@ -66,7 +66,10 @@ export default function Passport() {
 
   return (
     <Screen>
-      <Text variant="title" className="mb-3">Passport</Text>
+      <View className="flex-row items-center justify-between mb-3">
+        <Text variant="title">Passport</Text>
+        <Button title="Add photo" size="sm" variant="secondary" onPress={() => router.push("/add-photo")} />
+      </View>
       <View className="h-40 rounded-2xl overflow-hidden mb-6 bg-surface">
         {markers.length > 0 ? (
           <AppleMaps.View
