@@ -15,6 +15,8 @@ interface AuthValue {
   loading: boolean;
   signInWithGoogle(): Promise<void>;
   signInWithApple(): Promise<void>;
+  signInWithEmailOtp(email: string): Promise<void>;
+  verifyEmailOtp(email: string, token: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -54,13 +56,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }
 
+  // Passwordless email: one flow covers sign-up and log-in. The Supabase Magic Link
+  // email template must include {{ .Token }} so users get a 6-digit code to type in.
+  async function signInWithEmailOtp(email: string) {
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    if (error) throw error;
+  }
+
+  async function verifyEmailOtp(email: string, token: string) {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+    if (error) throw error;
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
   }
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, signInWithGoogle, signInWithApple, signOut }}
+      value={{ session, user: session?.user ?? null, loading, signInWithGoogle, signInWithApple, signInWithEmailOtp, verifyEmailOtp, signOut }}
     >
       {children}
     </AuthContext.Provider>

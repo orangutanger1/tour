@@ -5,8 +5,6 @@ import type { ApiError, GenerateRequest, GenerateResult } from "./api";
 
 interface TripFlowValue {
   generate(req: GenerateRequest): void;
-  prepare(req: GenerateRequest): void;
-  pendingRequest: GenerateRequest | null;
   status: "idle" | "pending" | "success" | "error";
   data: GenerateResult | undefined;
   error: ApiError | null;
@@ -19,21 +17,14 @@ const TripFlowContext = createContext<TripFlowValue | null>(null);
 export function TripFlowProvider({ children }: { children: ReactNode }) {
   const mutation = useGenerateItinerary();
   const [lastRequest, setLastRequest] = useState<GenerateRequest | null>(null);
-  const [pendingRequest, setPendingRequest] = useState<GenerateRequest | null>(null);
 
   function generate(req: GenerateRequest) {
     setLastRequest(req);
-    setPendingRequest(null);
     mutation.mutate(req);
-  }
-
-  function prepare(req: GenerateRequest) {
-    setPendingRequest(req);
   }
 
   function reset() {
     setLastRequest(null);
-    setPendingRequest(null);
     mutation.reset();
   }
 
@@ -41,8 +32,6 @@ export function TripFlowProvider({ children }: { children: ReactNode }) {
     <TripFlowContext.Provider
       value={{
         generate,
-        prepare,
-        pendingRequest,
         status: mutation.status,
         data: mutation.data,
         error: mutation.error,

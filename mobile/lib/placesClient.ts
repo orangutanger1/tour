@@ -20,7 +20,9 @@ export async function autocompletePlaces(opts: {
   });
   if (!res.ok) throw new Error(`autocomplete failed (${res.status})`);
   const data = await res.json() as { suggestions?: { text: string; placeId: string; types?: string[] }[] };
-  return (data.suggestions ?? []).map((s) => ({ text: s.text, placeId: s.placeId, types: s.types ?? [] }));
+  return (data.suggestions ?? [])
+    .map((s) => ({ text: s.text, placeId: s.placeId, types: s.types ?? [] }))
+    .filter((s) => s.text && s.placeId); // never render an icon-only row
 }
 
 export interface Region { label: string; hook: string; placeId: string; }

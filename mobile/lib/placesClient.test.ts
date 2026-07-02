@@ -31,6 +31,19 @@ it("sends addresses flag in the body when requested", async () => {
   expect(sentBody.addresses).toBe(true);
 });
 
+it("drops suggestions with empty text or placeId", async () => {
+  const fetchImpl = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ suggestions: [
+      { text: "", placeId: "p1" },
+      { text: "Japan", placeId: "" },
+      { text: "Japan", placeId: "p2" },
+    ] }),
+  }) as unknown as typeof fetch;
+  const out = await autocompletePlaces({ query: "Japan", baseUrl: "http://x", anonKey: "k", fetchImpl });
+  expect(out).toEqual([{ text: "Japan", placeId: "p2", types: [] }]);
+});
+
 test("throws on non-2xx", async () => {
   await expect(autocompletePlaces({ query: "Lis", baseUrl: "https://x", anonKey: "k", fetchImpl: fakeFetch({ error: "no" }, 500) }))
     .rejects.toBeTruthy();
