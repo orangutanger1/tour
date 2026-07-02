@@ -33,23 +33,6 @@ export default function Trips() {
     return cover ? coverUrlsQ.data?.[cover.storagePath] : undefined;
   };
 
-  if (!session) {
-    return (
-      <Screen decor>
-        <View className="flex-1 justify-center gap-3">
-          <Text variant="display">Trips that feel local.</Text>
-          <Text variant="body" className="text-ink-muted">
-            Tell us your vibe and we'll plan every day — sights, food, and routes.
-          </Text>
-        </View>
-        <View className="pb-24 gap-3">
-          <Button title="Plan a trip" size="lg" variant="gradient" onPress={() => router.push("/onboarding")} />
-          <Button title="Sign in" variant="ghost" onPress={() => router.push("/(auth)/sign-in")} />
-        </View>
-      </Screen>
-    );
-  }
-
   function Header() {
     return (
       <View className="flex-row items-center justify-between mb-4">

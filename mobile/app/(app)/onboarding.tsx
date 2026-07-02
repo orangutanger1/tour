@@ -2,7 +2,7 @@
 // 8 one-question pages: destination → dates → interests → budget → pace →
 // transport → start point → review. One primary CTA per page.
 import { useEffect, useState } from "react";
-import { View, Pressable } from "react-native";
+import { View, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import Animated, { FadeInRight } from "react-native-reanimated";
@@ -13,7 +13,6 @@ import {
 import { formatShort } from "../../lib/dates";
 import { getProfile } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
-import { useAuth } from "../../lib/auth";
 import { useTripFlow } from "../../lib/tripFlow";
 import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
@@ -61,13 +60,12 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
 
 export default function Onboarding() {
   const router = useRouter();
-  const { session } = useAuth();
   const tripFlow = useTripFlow();
   const [step, setStep] = useState(0);
   // Rehydrate an in-progress trip across remounts (e.g. "Edit trip" after a failed
-  // generate does router.replace, which remounts this screen). lastRequest/pendingRequest
-  // live in TripFlowProvider (above the Stack), so they survive the remount.
-  const seedRequest = tripFlow.lastRequest ?? tripFlow.pendingRequest;
+  // generate does router.replace, which remounts this screen). lastRequest lives in
+  // TripFlowProvider (above the Stack), so it survives the remount.
+  const seedRequest = tripFlow.lastRequest;
   const [state, setState] = useState<OnboardingState>(
     seedRequest ? stateFromRequest(seedRequest) : stateFromProfile(null),
   );
@@ -106,14 +104,8 @@ export default function Onboarding() {
   }
 
   function onGenerate() {
-    const req = buildRequest(state);
-    if (session) {
-      tripFlow.generate(req);
-      router.push("/generating");
-    } else {
-      tripFlow.prepare(req);
-      router.push("/(auth)/sign-in");
-    }
+    tripFlow.generate(buildRequest(state));
+    router.push("/generating");
   }
 
   const page = STEPS[step];
@@ -137,7 +129,7 @@ export default function Onboarding() {
   ];
 
   return (
-    <Screen scroll>
+    <Screen>
       <View className="flex-row items-center gap-4 mb-2">
         <Pressable
           onPress={() => (step === 0 ? router.back() : setStep((s) => s - 1))}
@@ -149,7 +141,12 @@ export default function Onboarding() {
         <ProgressBar progress={(step + 1) / STEP_COUNT} className="flex-1" />
       </View>
 
-      <Animated.View key={step} entering={FadeInRight.springify().damping(18)} className="gap-5 flex-1">
+      {/* Footer sits outside the scroll area inside a KeyboardAvoidingView, so the
+          Continue button is always reachable — with the keyboard open the old layout
+          pushed it below the fold behind 5 suggestion rows. */}
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+      <ScrollView className="flex-1" contentContainerClassName="gap-4 py-2" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <Animated.View key={step} entering={FadeInRight.duration(200)} className="gap-5">
         <View className="gap-1">
           <Text variant="display">{prompt.title}</Text>
           {prompt.sub ? <Text variant="body" className="text-ink-muted">{prompt.sub}</Text> : null}
@@ -331,8 +328,9 @@ export default function Onboarding() {
           </View>
         ) : null}
       </Animated.View>
+      </ScrollView>
 
-      <View className="gap-2 mt-6">
+      <View className="gap-2 pt-3">
         {page === "start" ? (
           <Button
             title="Skip"
@@ -346,6 +344,7 @@ export default function Onboarding() {
           <Button title="Continue" size="lg" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} />
         )}
       </View>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }
