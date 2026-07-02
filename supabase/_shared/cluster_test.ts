@@ -56,3 +56,29 @@ Deno.test("never drops the last stop of a day (budget can't empty a day)", () =>
   const groups = assignDays({ stops: s, coords: c, tripDays: 2, maxDriveKm: 1 });
   assertEquals(groups.flat().length, 2);
 });
+
+// Three clusters at increasing distance from start (0,0): near A, mid B, far C.
+const tripTypeCoords: Record<string, { lat: number; lng: number }> = {
+  A1: { lat: 0.1, lng: 0.1 }, A2: { lat: 0.12, lng: 0.1 },
+  B1: { lat: 1.0, lng: 1.0 }, B2: { lat: 1.02, lng: 1.0 },
+  C1: { lat: 2.0, lng: 2.0 }, C2: { lat: 2.02, lng: 2.0 },
+};
+const tripTypeStops = Object.keys(tripTypeCoords).map((placeId) => ({ placeId }));
+const start = { lat: 0, lng: 0 };
+
+Deno.test("assignDays oneway: days progress away from the start", () => {
+  const days = assignDays({ stops: tripTypeStops, coords: tripTypeCoords, tripDays: 3, maxDriveKm: 1000, start, tripType: "oneway" });
+  assertEquals(days.map((d) => d[0].placeId[0]), ["A", "B", "C"]);
+});
+
+Deno.test("assignDays round: first and last days are the two nearest clusters", () => {
+  const days = assignDays({ stops: tripTypeStops, coords: tripTypeCoords, tripDays: 3, maxDriveKm: 1000, start, tripType: "round" });
+  assertEquals(days[0][0].placeId[0], "A");   // out from the start…
+  assertEquals(days[1][0].placeId[0], "C");   // …far in the middle…
+  assertEquals(days[2][0].placeId[0], "B");   // …back near the start
+});
+
+Deno.test("assignDays without tripType keeps legacy ordering (no reorder)", () => {
+  const legacy = assignDays({ stops: tripTypeStops, coords: tripTypeCoords, tripDays: 3, maxDriveKm: 1000, start });
+  assertEquals(legacy.map((d) => d[0].placeId[0]), ["A", "B", "C"]); // nn-chain from start already ascends
+});

@@ -1,8 +1,9 @@
 // supabase/functions/generate-itinerary/handler.ts
-import type { Itinerary, Poi, Prefs, Stop } from "../../_shared/types.ts";
+import type { Itinerary, Poi, Prefs, Stop, TripType } from "../../_shared/types.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import { areaRadiusKm, haversineKm, type Viewport } from "../../_shared/area.ts";
 import { assignDays } from "../../_shared/cluster.ts";
+import { planLegs, legCenters, partitionByNearest, splitRoundRobin } from "../../_shared/legs.ts";
 import { sunsetLocalMinutes } from "../../_shared/solar.ts";
 import { buildDaySchedule } from "../../_shared/schedule.ts";
 
@@ -24,6 +25,9 @@ export interface GenerateRequest {
   destinationPlaceId?: string;
   startLocation?: string;
   startPlaceId?: string;
+  startDate?: string;   // ISO YYYY-MM-DD
+  endDate?: string;
+  tripType?: TripType;  // default "round"
 }
 
 export interface HandlerDeps {
@@ -45,6 +49,9 @@ export async function handleGenerate(
   if (!body || body.tripDays < 1) {
     return { status: 400, body: { error: "tripDays must be >= 1" } };
   }
+  if (body.tripDays > 365) {
+    return { status: 400, body: { error: "tripDays must be <= 365" } };
+  }
   if ((await deps.countTripsToday(userId)) >= DAILY_CAP) {
     return { status: 429, body: { error: "daily generation limit reached" } };
   }
@@ -55,13 +62,27 @@ export async function handleGenerate(
   const locationBias = hasCenter ? { center: dest.center, radiusKm } : undefined;
   const travelMode = body.prefs.transport === "compact" ? "WALK" as const : "DRIVE" as const;
 
+  const tripType: TripType = body.tripType ?? "round";
+  const legSizes = planLegs(body.tripDays);
+  const multiLeg = legSizes.length > 1;
+  const centers = legCenters({ center: dest.center, viewport: dest.viewport, legs: legSizes.length, tripType });
+  // ponytail: leg bias radius = region radius / legs, floor 10km — tune against real long trips.
+  const legRadiusKm = Math.max(radiusKm / legSizes.length, 10);
+
   const wantsFood = body.prefs.interests.includes("food");
   // Food and lodging are enrichments, not the trip itself — a flaky Places call
   // for either should degrade (empty list) rather than crash the whole request
   // into the runtime's 546. Only attractions are essential; if they fail the
   // request throws and the index wrapper turns it into a readable 500.
-  const [attractions, food, lodging] = await Promise.all([
-    deps.fetchPois({ location: body.location, kind: "attraction", prefs: body.prefs, locationBias }),
+  // ponytail: food/lodging stay whole-region even for multi-leg trips; meals
+  // degrade to free-range gaps when the ~20-restaurant pool runs out. Upgrade:
+  // per-leg food fetch if long-trip meals matter.
+  const [attractionPools, food, lodging] = await Promise.all([
+    Promise.all(centers.map((c) =>
+      deps.fetchPois({
+        location: body.location, kind: "attraction", prefs: body.prefs,
+        locationBias: hasCenter ? { center: c, radiusKm: multiLeg ? legRadiusKm : radiusKm } : undefined,
+      }))),
     wantsFood
       ? deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias }).catch(() => [] as Poi[])
       : Promise.resolve([] as Poi[]),
@@ -74,35 +95,55 @@ export async function handleGenerate(
     : null;
   const startCenter = start && (start.center.lat !== 0 || start.center.lng !== 0) ? start.center : null;
 
-  // Food is no longer curated by the LLM. Attractions alone form the pool, so the
-  // pace stop budget applies to attractions only; food fills meal slots below.
-  const pois = attractions;
+  // Dedupe the fetched attractions globally, then split into disjoint per-leg
+  // pools so parallel curations can never pick the same place twice. Food is
+  // never curated by the LLM (meals are deterministic add-ons below).
+  const seenIds = new Set<string>();
+  const pois: Poi[] = [];
+  for (const pool of attractionPools) {
+    for (const p of pool) {
+      if (!seenIds.has(p.placeId)) { seenIds.add(p.placeId); pois.push(p); }
+    }
+  }
+  const legPools = multiLeg
+    ? (hasCenter ? partitionByNearest(pois, centers) : splitRoundRobin(pois, legSizes.length))
+    : [pois];
   const anchorPoi = lodging[0] ?? null;
 
-  let itinerary: Itinerary;
+  // Curate each leg in parallel — grounding + validation stay per-leg
+  // (expectedDays = leg length, placeId whitelist = that leg's pool).
+  let legItins: Itinerary[];
   try {
-    itinerary = await deps.curate({ pois, prefs: body.prefs, tripDays: body.tripDays });
+    legItins = await Promise.all(legPools.map((pool, i) =>
+      deps.curate({ pois: pool, prefs: body.prefs, tripDays: legSizes[i] })));
   } catch (e) {
     if (e instanceof CurationError) return { status: 502, body: { error: "could not build itinerary" } };
     throw e;
   }
 
   // The LLM chose the places but can't see coordinates, so its day grouping
-  // produced implausible cross-region driving. Re-group the chosen stops into
+  // produced implausible cross-region driving. Re-group each leg's stops into
   // geographically compact days under a per-day drive budget; geography decides
-  // the days, the LLM's selection/blurbs/dwell ride along unchanged.
+  // the days, the LLM's selection/blurbs/dwell ride along unchanged. Trip-type
+  // ordering applies within a single leg; multi-leg trips already encode
+  // out-and-back (or drift) in the leg centers themselves.
   const coordsById: Record<string, { lat: number; lng: number }> = {};
   for (const p of pois) coordsById[p.placeId] = { lat: p.lat, lng: p.lng };
   const tuning = TRANSPORT_TUNING[body.prefs.transport];
   const maxDriveKm = (tuning.budgetMin / 60) * tuning.speedKmh;
-  const grouped = assignDays({
-    stops: itinerary.days.flatMap((d) => d.stops),
-    coords: coordsById,
-    tripDays: body.tripDays,
-    maxDriveKm,
-    start: startCenter,
+  const allDays: Itinerary["days"] = [];
+  legItins.forEach((li, i) => {
+    const grouped = assignDays({
+      stops: li.days.flatMap((d) => d.stops),
+      coords: coordsById,
+      tripDays: legSizes[i],
+      maxDriveKm,
+      start: i === 0 ? startCenter : null,
+      tripType: multiLeg ? undefined : tripType,
+    });
+    for (const stops of grouped) allDays.push({ day: allDays.length + 1, lodgingPlaceId: null, stops });
   });
-  itinerary = { days: grouped.map((stops, i) => ({ day: i + 1, lodgingPlaceId: null, stops })) };
+  let itinerary: Itinerary = { days: allDays };
 
   const byId = new Map(pois.map((p) => [p.placeId, p]));
   // Route days in parallel — each day mutates only its own object, so a serial
@@ -111,9 +152,10 @@ export async function handleGenerate(
   const lastDay = itinerary.days.length;
   await Promise.all(itinerary.days.map(async (day) => {
     day.lodgingPlaceId = anchorPoi?.placeId ?? null;
-    // Day 1 and the final day anchor on the traveler's start location when set,
-    // so the route begins/returns at home/airport instead of a random point.
-    const startAnchor = startCenter && (day.day === 1 || day.day === lastDay) ? startCenter : null;
+    // Day 1 anchors on the traveler's start when set; the final day returns
+    // there only on round trips — one-way routes end wherever they drifted.
+    const anchorAtStart = startCenter && (day.day === 1 || (tripType === "round" && day.day === lastDay));
+    const startAnchor = anchorAtStart ? startCenter : null;
     if (!startAnchor && !anchorPoi && !hasCenter) {
       day.routePolyline = undefined;
       return;

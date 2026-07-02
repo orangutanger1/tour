@@ -81,18 +81,47 @@ function enforceBudget<T extends { placeId: string }>(
   return g;
 }
 
+function groupCentroid<T extends { placeId: string }>(g: T[], coords: Record<string, LatLng>): LatLng {
+  if (!g.length) return { lat: 0, lng: 0 };
+  const sum = g.reduce((a, x) => {
+    const c = coordOf(coords, x.placeId);
+    return { lat: a.lat + c.lat, lng: a.lng + c.lng };
+  }, { lat: 0, lng: 0 });
+  return { lat: sum.lat / g.length, lng: sum.lng / g.length };
+}
+
+// Day ordering by trip type. oneway: days ascend by distance from the start —
+// the route drifts across the region. round: nearest day first, second-nearest
+// last, the rest outbound in between — the trip ends back near where it began.
+export function orderGroupsForTripType<T extends { placeId: string }>(
+  groups: T[][],
+  coords: Record<string, LatLng>,
+  start: LatLng | null,
+  tripType?: "round" | "oneway",
+): T[][] {
+  if (!tripType || groups.length < 3) return groups;
+  const ref = start ?? groupCentroid(groups[0], coords);
+  const sorted = groups
+    .map((g) => ({ g, d: haversineKm(ref, groupCentroid(g, coords)) }))
+    .sort((a, b) => a.d - b.d)
+    .map((x) => x.g);
+  if (tripType === "oneway") return sorted;
+  return [sorted[0], ...sorted.slice(2), sorted[1]];
+}
+
 export function assignDays<T extends { placeId: string }>(opts: {
   stops: T[];
   coords: Record<string, LatLng>;
   tripDays: number;
   maxDriveKm: number;       // per-day road-distance budget
   start?: LatLng | null;    // anchor day 1 nearest the traveler's start
+  tripType?: "round" | "oneway";
   roadFactor?: number;
 }): T[][] {
   const { stops, coords, tripDays, maxDriveKm } = opts;
   const roadFactor = opts.roadFactor ?? DEFAULT_ROAD_FACTOR;
   const seed = opts.start ?? (stops.length ? coordOf(coords, stops[0].placeId) : { lat: 0, lng: 0 });
   const ordered = nnChain(stops, coords, seed);
-  const groups = splitBalanced(ordered, Math.max(1, tripDays));
-  return groups.map((g) => enforceBudget(g, coords, maxDriveKm, roadFactor));
+  const groups = splitBalanced(ordered, Math.max(1, tripDays)).map((g) => enforceBudget(g, coords, maxDriveKm, roadFactor));
+  return orderGroupsForTripType(groups, coords, opts.start ?? null, opts.tripType);
 }
