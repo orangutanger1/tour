@@ -1,6 +1,6 @@
 // mobile/app/(app)/itinerary.tsx
 import { useEffect, useMemo, useState } from "react";
-import { View, SectionList, Pressable } from "react-native";
+import { View, SectionList, Pressable, ScrollView } from "react-native";
 import { AppleMaps } from "expo-maps";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
@@ -131,18 +131,18 @@ export default function Itinerary() {
       <Toggle />
       {view === "map" ? (
         <View className="flex-1">
-          <View className="flex-row flex-wrap gap-2 mb-2">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2 pb-2" className="grow-0 mb-1">
             {days.map((d) => (
               <Pressable
                 key={d.day}
                 onPress={() => setSelectedDay(d.day)}
-                className={`px-3 py-1.5 rounded-pill ${selectedDay === d.day ? "bg-accent" : "bg-surface-2"}`}
+                className={`px-4 py-2 rounded-pill border ${selectedDay === d.day ? "bg-accent border-accent" : "bg-white/75 border-white/60 shadow-soft"}`}
               >
-                <Text variant="label" className={selectedDay === d.day ? "text-white" : "text-ink-muted"}>Day {d.day}</Text>
+                <Text variant="label" className={selectedDay === d.day ? "text-ink-inverse" : "text-ink-muted"}>Day {d.day}</Text>
               </Pressable>
             ))}
-          </View>
-          <View className="flex-1 rounded-lg overflow-hidden">
+          </ScrollView>
+          <View className="flex-1 rounded-xl overflow-hidden">
             <AppleMaps.View
               style={{ flex: 1 }}
               cameraPosition={dayMarkers[0] ? { coordinates: dayMarkers[0].coordinates, zoom: 12 } : undefined}
@@ -168,7 +168,11 @@ export default function Itinerary() {
             return isMeal ? (
               <Card className={`gap-1 ${item.kind === "meal-gap" ? "border-dashed" : ""}`}>
                 <View className="flex-row items-baseline gap-2">
-                  {item.startTime ? <Text variant="label" className="text-accent">{item.startTime}</Text> : null}
+                  {item.startTime ? (
+                    <View className="px-2 py-0.5 rounded-pill bg-accent-soft">
+                      <Text variant="label" className="text-accent text-[12px]">{item.startTime}</Text>
+                    </View>
+                  ) : null}
                   <Text variant="heading">{mealLabel}{item.placeId ? ` · ${item.name}` : ""}</Text>
                 </View>
                 <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
@@ -177,7 +181,11 @@ export default function Itinerary() {
             ) : (
               <Card className="gap-1">
                 <View className="flex-row items-baseline gap-2">
-                  {item.startTime ? <Text variant="label" className="text-accent">{item.startTime}</Text> : null}
+                  {item.startTime ? (
+                    <View className="px-2 py-0.5 rounded-pill bg-accent-soft">
+                      <Text variant="label" className="text-accent text-[12px]">{item.startTime}</Text>
+                    </View>
+                  ) : null}
                   <Text variant="heading">{item.num}. {item.name}</Text>
                 </View>
                 <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
