@@ -13,4 +13,5 @@ export { Stepper } from "./Stepper";
 export { PhotoStack, type StackPhoto } from "./PhotoStack";
 export { AlbumSection } from "./AlbumSection";
 export { Icon, type IconName } from "./Icon";
+export { PressableScale, AnimatedPressable, AnimatedView } from "./PressableScale";
 export { SUNSET, SUNSET_SOFT, BLOB_ROSE, BLOB_AMBER } from "./gradients";
