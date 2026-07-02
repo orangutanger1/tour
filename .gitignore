@@ -19,3 +19,4 @@ node_modules/
 
 # visual brainstorm companion
 .superpowers/
+.worktrees/
