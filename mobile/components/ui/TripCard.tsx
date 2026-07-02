@@ -11,7 +11,7 @@ export function TripCard({ trip, coverUrl, onPress }: { trip: TripSummary; cover
   const initial = trip.location.trim().charAt(0).toUpperCase() || "?";
   return (
     <Card onPress={onPress} className="overflow-hidden">
-      <View className="h-28 -mx-4 -mt-4 mb-3 bg-accent-soft items-center justify-center">
+      <View className="h-28 -mx-5 -mt-5 mb-3 bg-accent-soft items-center justify-center">
         {coverUrl ? (
           <Image source={{ uri: coverUrl }} className="w-full h-full" />
         ) : (

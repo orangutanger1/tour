@@ -13,8 +13,16 @@ module.exports = {
         success: "#10B981",
         warning: "#F59E0B",
         error: "#EF4444",
+        tint: {
+          scenic: "#DFF7F1", food: "#FFF1DC", history: "#E8EBFF", nightlife: "#F1E8FF",
+          outdoors: "#E3F6E6", art: "#FFE8F2", shopping: "#E3F0FF",
+        },
+        tintfg: {
+          scenic: "#0F766E", food: "#B45309", history: "#4338CA", nightlife: "#7C3AED",
+          outdoors: "#15803D", art: "#BE185D", shopping: "#1D4ED8",
+        },
       },
-      borderRadius: { sm: "8px", md: "12px", lg: "16px", xl: "24px", pill: "999px" },
+      borderRadius: { sm: "10px", md: "14px", lg: "20px", xl: "28px", pill: "999px" },
       fontFamily: {
         jakarta: ["PlusJakartaSans_400Regular"],
         "jakarta-medium": ["PlusJakartaSans_500Medium"],
@@ -25,6 +33,7 @@ module.exports = {
       boxShadow: {
         soft: "0px 2px 8px rgba(26,14,18,0.06)",
         card: "0px 4px 16px rgba(26,14,18,0.08)",
+        float: "0px 8px 24px rgba(26,14,18,0.12)",
       },
     },
   },
