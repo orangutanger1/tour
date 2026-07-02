@@ -9,7 +9,7 @@ import { SUNSET } from "./gradients";
 type Variant = "primary" | "secondary" | "ghost" | "gradient";
 type Size = "sm" | "md" | "lg";
 
-const BASE = "flex-row items-center justify-center rounded-pill overflow-hidden";
+const BASE = "flex-row items-center justify-center rounded-pill";
 const SIZES: Record<Size, string> = { sm: "h-10 px-4", md: "h-12 px-5", lg: "h-14 px-6" };
 const BG: Record<Variant, string> = {
   primary: "bg-accent",
@@ -32,7 +32,7 @@ export function Button({ title, onPress, variant = "primary", size = "md", disab
           colors={SUNSET}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}
+          style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, borderRadius: 999 }}
         />
       ) : null}
       {loading ? (
