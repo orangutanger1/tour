@@ -331,3 +331,68 @@ Deno.test("accepts startDate/endDate/tripType fields", async () => {
   );
   assertEquals(r.status, 200);
 });
+
+function legDeps(kmPerLeg: { curateCalls: { tripDays: number; poolIds: string[] }[] }) {
+  // 16-day trip → legs [6,5,5]; give each leg-local fetch a distinct pool.
+  let fetchCall = 0;
+  return baseDeps({
+    resolveDestination: () => Promise.resolve({
+      center: { lat: 5, lng: 5 },
+      viewport: { low: { lat: 0, lng: 0 }, high: { lat: 10, lng: 10 } },
+    }),
+    fetchPois: (o: any) => {
+      if (o.kind !== "attraction") return Promise.resolve([]);
+      const i = fetchCall++;
+      const c = o.locationBias?.center ?? { lat: 5, lng: 5 };
+      // 8 pois per leg, clustered at the leg's bias center
+      return Promise.resolve(Array.from({ length: 8 }, (_, j) => ({
+        placeId: `L${i}-P${j}`, name: `P${j}`, kind: "attraction" as const,
+        lat: c.lat + j * 0.001, lng: c.lng,
+      })));
+    },
+    curate: ({ pois, tripDays }: any) => {
+      kmPerLeg.curateCalls.push({ tripDays, poolIds: pois.map((p: Poi) => p.placeId) });
+      // one stop per day from this leg's pool
+      return Promise.resolve({
+        days: Array.from({ length: tripDays }, (_, d) => ({
+          day: d + 1, lodgingPlaceId: null,
+          stops: [{ placeId: pois[d % pois.length].placeId, name: "s", blurb: "x" }],
+        })),
+      });
+    },
+  });
+}
+
+Deno.test("long trip: splits into legs, curates per leg in parallel pools, renumbers days 1..N", async () => {
+  const seen = { curateCalls: [] as { tripDays: number; poolIds: string[] }[] };
+  const r = await handleGenerate(
+    { location: "X", tripDays: 16, destinationPlaceId: "D", tripType: "oneway", prefs },
+    "u1", legDeps(seen),
+  );
+  assertEquals(r.status, 200);
+  assertEquals(seen.curateCalls.map((c) => c.tripDays).sort(), [5, 5, 6]);
+  // pools are disjoint
+  const all = seen.curateCalls.flatMap((c) => c.poolIds);
+  assertEquals(new Set(all).size, all.length);
+  const days = (r.body as { itinerary: Itinerary }).itinerary.days;
+  assertEquals(days.length, 16);
+  assertEquals(days.map((d) => d.day), Array.from({ length: 16 }, (_, i) => i + 1));
+});
+
+Deno.test("oneway: final day does NOT anchor back at the start location", async () => {
+  const anchors: { lat: number; lng: number }[] = [];
+  const threeDay: Itinerary = { days: [1, 2, 3].map((d) => ({
+    day: d, lodgingPlaceId: null, stops: [{ placeId: `A${d}`, name: `A${d}`, blurb: "x" }],
+  })) };
+  const deps = baseDeps({
+    resolveDestination: ({ placeId }) => Promise.resolve(
+      placeId === "START" ? { center: { lat: 5, lng: 5 }, viewport: null } : { center: { lat: 1, lng: 1 }, viewport: null }),
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : [1, 2, 3].map((d) => (
+      { placeId: `A${d}`, name: `A${d}`, kind: "attraction" as const, lat: 0, lng: 0 }))),
+    curate: () => Promise.resolve(threeDay),
+    orderStops: ({ stops, anchor }) => { anchors.push(anchor); return Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 0 })), polyline: undefined }); },
+  });
+  await handleGenerate({ location: "X", tripDays: 3, destinationPlaceId: "DEST", startPlaceId: "START", tripType: "oneway", prefs }, "u1", deps);
+  assertEquals(anchors[0], { lat: 5, lng: 5 });   // day 1 still starts at start
+  assertEquals(anchors[2], { lat: 9, lng: 9 });   // last day anchors at lodging, not start
+});
