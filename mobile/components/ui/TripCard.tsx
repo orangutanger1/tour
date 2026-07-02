@@ -1,7 +1,9 @@
 // mobile/components/ui/TripCard.tsx
 import { View, Image } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Card } from "./Card";
 import { Text } from "./Text";
+import { SUNSET_SOFT } from "./gradients";
 import { tripDayCount, type TripSummary } from "../../lib/trips";
 import { formatShort } from "../../lib/dates";
 
@@ -12,11 +14,13 @@ export function TripCard({ trip, coverUrl, onPress }: { trip: TripSummary; cover
   const initial = trip.location.trim().charAt(0).toUpperCase() || "?";
   return (
     <Card onPress={onPress} className="overflow-hidden">
-      <View className="h-28 -mx-5 -mt-5 mb-3 bg-accent-soft items-center justify-center">
+      <View className="h-40 -mx-5 -mt-5 mb-3 items-center justify-center overflow-hidden">
         {coverUrl ? (
           <Image source={{ uri: coverUrl }} className="w-full h-full" />
         ) : (
-          <Text className="text-[64px] leading-[64px] font-jakarta-extrabold text-accent opacity-30">{initial}</Text>
+          <LinearGradient colors={SUNSET_SOFT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center" }}>
+            <Text className="text-[72px] leading-[80px] font-jakarta-extrabold text-accent opacity-30">{initial}</Text>
+          </LinearGradient>
         )}
       </View>
       <Text variant="heading">{trip.location}</Text>

@@ -35,16 +35,16 @@ export default function Trips() {
 
   if (!session) {
     return (
-      <Screen>
+      <Screen decor>
         <View className="flex-1 justify-center gap-3">
-          <Text variant="display">Welcome to your trips</Text>
+          <Text variant="display">Trips that feel local.</Text>
           <Text variant="body" className="text-ink-muted">
-            Sign in to see your saved trips — or start planning a new one.
+            Tell us your vibe and we'll plan every day — sights, food, and routes.
           </Text>
         </View>
-        <View className="pb-2 gap-3">
-          <Button title="Sign in" onPress={() => router.push("/(auth)/sign-in")} />
-          <Button title="Plan a trip" variant="secondary" onPress={() => router.push("/onboarding")} />
+        <View className="pb-24 gap-3">
+          <Button title="Plan a trip" size="lg" variant="gradient" onPress={() => router.push("/onboarding")} />
+          <Button title="Sign in" variant="ghost" onPress={() => router.push("/(auth)/sign-in")} />
         </View>
       </Screen>
     );
@@ -53,7 +53,7 @@ export default function Trips() {
   function Header() {
     return (
       <View className="flex-row items-center justify-between mb-4">
-        <Text variant="title">Your trips</Text>
+        <Text variant="display">Your trips</Text>
         {session ? (
           <Pressable
             onPress={() => router.push("/account")}
@@ -85,7 +85,7 @@ export default function Trips() {
 
   if (!trips || trips.length === 0) {
     return (
-      <Screen>
+      <Screen decor>
         <Header />
         <View className="flex-1 justify-center gap-3">
           <Text variant="display">Where to next?</Text>
@@ -93,8 +93,8 @@ export default function Trips() {
             Tell us your vibe and we'll plan a local-feel trip, day by day.
           </Text>
         </View>
-        <View className="pb-2">
-          <Button title="Plan a trip" onPress={() => router.push("/onboarding")} />
+        <View className="pb-24">
+          <Button title="Plan a trip" size="lg" variant="gradient" onPress={() => router.push("/onboarding")} />
         </View>
       </Screen>
     );
@@ -112,7 +112,7 @@ export default function Trips() {
         )}
       />
       <View className="absolute left-6 right-6 bottom-28">
-        <Button title="Plan a trip" onPress={() => router.push("/onboarding")} />
+        <Button title="Plan a trip" size="lg" variant="gradient" onPress={() => router.push("/onboarding")} />
       </View>
     </Screen>
   );
