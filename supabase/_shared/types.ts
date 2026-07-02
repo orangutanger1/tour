@@ -1,4 +1,6 @@
 // supabase/_shared/types.ts
+export type TripType = "round" | "oneway";
+
 export interface Prefs {
   interests: string[];                 // e.g. ["scenic", "food", "history"]
   budget: "low" | "mid" | "high";

@@ -317,3 +317,17 @@ Deno.test("day 1 and last day anchor on the start location", async () => {
   assertEquals(anchors[2], { lat: 5, lng: 5 }); // last day -> start
   assertEquals(anchors[1], { lat: 9, lng: 9 }); // middle day -> lodging
 });
+
+Deno.test("rejects tripDays > 365 (abuse guard, not a UX clamp)", async () => {
+  const r = await handleGenerate({ location: "X", tripDays: 366, prefs }, "u1", baseDeps());
+  assertEquals(r.status, 400);
+});
+
+Deno.test("accepts startDate/endDate/tripType fields", async () => {
+  const r = await handleGenerate(
+    { location: "X", tripDays: 1, prefs, startDate: "2026-07-12", endDate: "2026-07-12", tripType: "oneway" },
+    "u1",
+    baseDeps(),
+  );
+  assertEquals(r.status, 200);
+});

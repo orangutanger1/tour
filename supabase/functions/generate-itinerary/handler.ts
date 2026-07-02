@@ -1,5 +1,5 @@
 // supabase/functions/generate-itinerary/handler.ts
-import type { Itinerary, Poi, Prefs, Stop } from "../../_shared/types.ts";
+import type { Itinerary, Poi, Prefs, Stop, TripType } from "../../_shared/types.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import { areaRadiusKm, haversineKm, type Viewport } from "../../_shared/area.ts";
 import { assignDays } from "../../_shared/cluster.ts";
@@ -24,6 +24,9 @@ export interface GenerateRequest {
   destinationPlaceId?: string;
   startLocation?: string;
   startPlaceId?: string;
+  startDate?: string;   // ISO YYYY-MM-DD
+  endDate?: string;
+  tripType?: TripType;  // default "round"
 }
 
 export interface HandlerDeps {
@@ -44,6 +47,9 @@ export async function handleGenerate(
 ): Promise<{ status: number; body: unknown }> {
   if (!body || body.tripDays < 1) {
     return { status: 400, body: { error: "tripDays must be >= 1" } };
+  }
+  if (body.tripDays > 365) {
+    return { status: 400, body: { error: "tripDays must be <= 365" } };
   }
   if ((await deps.countTripsToday(userId)) >= DAILY_CAP) {
     return { status: 429, body: { error: "daily generation limit reached" } };
