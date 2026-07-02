@@ -22,6 +22,18 @@ test("listTrips maps rows to TripSummary", async () => {
   expect(trips).toEqual([{ id: "t1", location: "Kyoto", itinerary: itin, createdAt: "2026-06-01T00:00:00Z" }]);
 });
 
+test("rowToTrip maps date columns when present and omits them when null", async () => {
+  const dated = { ...row, start_date: "2026-07-12", end_date: "2026-07-18", trip_type: "round" };
+  const undated = { ...row, id: "t2", start_date: null, end_date: null, trip_type: null };
+  const [a, b] = await listTrips(listClient({ data: [dated, undated], error: null }));
+  expect(a.startDate).toBe("2026-07-12");
+  expect(a.endDate).toBe("2026-07-18");
+  expect(a.tripType).toBe("round");
+  expect(b.startDate).toBeUndefined();
+  expect(b.endDate).toBeUndefined();
+  expect(b.tripType).toBeUndefined();
+});
+
 test("listTrips returns [] when no rows", async () => {
   expect(await listTrips(listClient({ data: null, error: null }))).toEqual([]);
 });

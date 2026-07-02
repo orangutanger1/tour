@@ -8,6 +8,7 @@ import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
 import { getTrip } from "../../lib/trips";
 import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
+import { formatDayHeader, addDaysISO } from "../../lib/dates";
 import { Screen, Text, Button, Card, EmptyState, Loading } from "../../components/ui";
 
 export default function Itinerary() {
@@ -97,8 +98,10 @@ export default function Itinerary() {
     ? [{ id: `route-${selectedDay}`, coordinates: decodePolyline(activeDay.routePolyline), color: "#E11D48", width: 4 }]
     : [];
 
+  // Saved trips carry dates on the row; a just-generated trip only has them on the request.
+  const startDate = tripId ? tripQuery.data?.startDate : flow.lastRequest?.startDate;
   const sections = days.map((d) => ({
-    title: `Day ${d.day}`,
+    title: startDate ? `${formatDayHeader(addDaysISO(startDate, d.day - 1))} · Day ${d.day}` : `Day ${d.day}`,
     lodging: d.lodgingPlaceId ? coords[d.lodgingPlaceId]?.name : undefined,
     data: numberStops(d.stops),
   }));

@@ -3,6 +3,7 @@ import { View, Image } from "react-native";
 import { Card } from "./Card";
 import { Text } from "./Text";
 import { tripDayCount, type TripSummary } from "../../lib/trips";
+import { formatShort } from "../../lib/dates";
 
 // Phase 1 has no user photos yet — cover is a tinted panel with the destination's
 // initial. Phase 2 swaps in the first uploaded photo as the cover.
@@ -19,7 +20,11 @@ export function TripCard({ trip, coverUrl, onPress }: { trip: TripSummary; cover
         )}
       </View>
       <Text variant="heading">{trip.location}</Text>
-      <Text variant="caption">{days === 1 ? "1-day trip" : `${days}-day trip`}</Text>
+      <Text variant="caption">
+        {trip.startDate && trip.endDate
+          ? `${formatShort(trip.startDate)} → ${formatShort(trip.endDate)} · ${days === 1 ? "1 day" : `${days} days`}`
+          : days === 1 ? "1-day trip" : `${days}-day trip`}
+      </Text>
     </Card>
   );
 }
