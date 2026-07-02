@@ -18,3 +18,5 @@ export { PressableScale, AnimatedPressable, AnimatedView } from "./PressableScal
 export { SUNSET, SUNSET_SOFT, BLOB_ROSE, BLOB_AMBER } from "./gradients";
 export { ProgressBar } from "./ProgressBar";
 export { Blobs } from "./Blobs";
+export { RangeCalendar } from "./RangeCalendar";
+export { Segmented } from "./Segmented";
