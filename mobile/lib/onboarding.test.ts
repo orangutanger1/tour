@@ -1,96 +1,97 @@
 import {
-  INTERESTS, MAX_TRIP_DAYS, stateFromProfile, stateFromRequest, canContinue, prefsFromState, buildRequest,
-  type OnboardingState,
+  INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
+  prefsFromState, buildRequest, tripDaysOf, shouldOfferRegions, type OnboardingState,
 } from "./onboarding";
 import type { Prefs } from "./types";
 
 const base: OnboardingState = {
-  interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced", location: "Lisbon", tripDays: 3,
+  interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced",
+  location: "Lisbon", startDate: "2026-07-12", endDate: "2026-07-18", tripType: "round",
 };
 
 test("INTERESTS has the fixed taxonomy", () => {
   expect(INTERESTS).toEqual(["scenic", "food", "history", "nightlife", "outdoors", "art", "shopping"]);
 });
 
-test("stateFromProfile seeds from prefs, blank trip fields", () => {
+test("STEPS is the 8-page destination-first flow", () => {
+  expect(STEPS).toEqual(["destination", "dates", "interests", "budget", "pace", "transport", "start", "review"]);
+  expect(STEP_COUNT).toBe(8);
+});
+
+test("stateFromProfile seeds prefs, blank trip fields, round trip default", () => {
   const prefs: Prefs = { interests: ["art"], budget: "high", pace: "packed", transport: "balanced" };
   const s = stateFromProfile(prefs);
   expect(s.interests).toEqual(["art"]);
   expect(s.budget).toBe("high");
-  expect(s.pace).toBe("packed");
   expect(s.location).toBe("");
-  expect(s.tripDays).toBeGreaterThanOrEqual(1);
+  expect(s.startDate).toBeUndefined();
+  expect(s.tripType).toBe("round");
 });
 
 test("stateFromProfile uses defaults when null", () => {
   const s = stateFromProfile(null);
   expect(s.interests).toEqual([]);
   expect(s.budget).toBe("mid");
-  expect(s.pace).toBe("balanced");
+  expect(s.tripType).toBe("round");
+});
+
+test("tripDaysOf derives inclusive days from the range, 0 when incomplete", () => {
+  expect(tripDaysOf(base)).toBe(7);
+  expect(tripDaysOf({ ...base, endDate: undefined })).toBe(0);
+  expect(tripDaysOf({ ...base, startDate: "2026-07-01", endDate: "2026-09-01" })).toBe(63); // no clamp
+});
+
+test("buildRequest emits dates, trip type, and derived tripDays", () => {
+  const req = buildRequest(base);
+  expect(req.tripDays).toBe(7);
+  expect(req.startDate).toBe("2026-07-12");
+  expect(req.endDate).toBe("2026-07-18");
+  expect(req.tripType).toBe("round");
+  expect(req.location).toBe("Lisbon");
 });
 
 test("stateFromRequest round-trips buildRequest (rehydrate in-progress trip)", () => {
   const s: OnboardingState = {
-    interests: ["scenic", "food", "outdoors"], budget: "high", pace: "balanced", transport: "far",
-    location: "Canada", tripDays: 5, destinationPlaceId: "p-canada",
+    interests: ["scenic", "food"], budget: "high", pace: "balanced", transport: "far",
+    location: "Canada", destinationPlaceId: "p-canada",
+    startDate: "2026-08-01", endDate: "2026-08-21", tripType: "oneway",
+    startLocation: "YVR", startPlaceId: "p-yvr",
   };
   expect(stateFromRequest(buildRequest(s))).toEqual(s);
 });
 
-test("canContinue step 0 needs >=1 interest", () => {
-  expect(canContinue(0, { ...base, interests: [] })).toBe(false);
-  expect(canContinue(0, { ...base, interests: ["food"] })).toBe(true);
+test("stateFromRequest defaults tripType to round when absent (old requests)", () => {
+  const req = buildRequest(base);
+  delete (req as unknown as Record<string, unknown>).tripType;
+  expect(stateFromRequest(req).tripType).toBe("round");
 });
 
-test("canContinue step 1 needs location and valid tripDays", () => {
-  expect(canContinue(1, { ...base, location: "  " })).toBe(false);
-  expect(canContinue(1, { ...base, tripDays: 0 })).toBe(false);
-  expect(canContinue(1, { ...base, tripDays: MAX_TRIP_DAYS + 1 })).toBe(false);
+test("canContinue: destination needs a location", () => {
+  expect(canContinue(0, { ...base, location: "  " })).toBe(false);
+  expect(canContinue(0, base)).toBe(true);
+});
+
+test("canContinue: dates needs a full range", () => {
+  expect(canContinue(1, { ...base, endDate: undefined })).toBe(false);
   expect(canContinue(1, base)).toBe(true);
+  expect(canContinue(1, { ...base, startDate: "2026-07-12", endDate: "2026-07-12" })).toBe(true); // 1-day
 });
 
-test("canContinue step 2 (review) is always true", () => {
+test("canContinue: interests needs at least one", () => {
+  expect(canContinue(2, { ...base, interests: [] })).toBe(false);
   expect(canContinue(2, base)).toBe(true);
 });
 
-test("prefsFromState drops trip fields", () => {
+test("canContinue: budget/pace/transport/start/review always pass (defaults exist)", () => {
+  for (const step of [3, 4, 5, 6, 7]) expect(canContinue(step, base)).toBe(true);
+});
+
+test("prefsFromState extracts prefs", () => {
   expect(prefsFromState(base)).toEqual({ interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced" });
 });
 
-test("buildRequest trims location and carries prefs", () => {
-  expect(buildRequest({ ...base, location: "  Porto " })).toEqual({
-    location: "Porto",
-    tripDays: 3,
-    prefs: { interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced" },
-  });
-});
-
-it("buildRequest includes destinationPlaceId when set", () => {
-  const s = { ...stateFromProfile(null), location: "Lisbon", destinationPlaceId: "p1" };
-  expect(buildRequest(s).destinationPlaceId).toBe("p1");
-});
-
-test("defaults transport to balanced and round-trips it", () => {
-  expect(stateFromProfile(null).transport).toBe("balanced");
-  const s = { ...stateFromProfile(null), transport: "compact" as const };
-  expect(prefsFromState(s).transport).toBe("compact");
-});
-
-import { shouldOfferRegions } from "./onboarding";
-
-test("shouldOfferRegions true for country / state", () => {
+test("shouldOfferRegions for country / admin_area_1 only", () => {
   expect(shouldOfferRegions(["country"])).toBe(true);
   expect(shouldOfferRegions(["administrative_area_level_1"])).toBe(true);
-});
-
-test("shouldOfferRegions false for city / poi", () => {
   expect(shouldOfferRegions(["locality"])).toBe(false);
-  expect(shouldOfferRegions([])).toBe(false);
-});
-
-test("buildRequest carries start location", () => {
-  const s = { interests: ["scenic"], budget: "mid", pace: "balanced", transport: "balanced", location: "Lisbon", tripDays: 3, startLocation: "  SFO  ", startPlaceId: "sp1" } as const;
-  const req = buildRequest(s as unknown as Parameters<typeof buildRequest>[0]);
-  expect(req.startLocation).toBe("SFO");
-  expect(req.startPlaceId).toBe("sp1");
 });

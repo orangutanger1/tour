@@ -1,5 +1,7 @@
 // mobile/lib/types.ts
 // MIRROR of supabase/_shared/types.ts — backend is the source of truth. Keep in sync by hand.
+export type TripType = "round" | "oneway";
+
 export interface Prefs {
   interests: string[];
   budget: "low" | "mid" | "high";

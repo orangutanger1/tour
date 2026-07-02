@@ -10,7 +10,6 @@ export { ListRow } from "./ListRow";
 export { EmptyState } from "./EmptyState";
 export { Loading } from "./Loading";
 export { TripCard } from "./TripCard";
-export { Stepper } from "./Stepper";
 export { PhotoStack, type StackPhoto } from "./PhotoStack";
 export { AlbumSection } from "./AlbumSection";
 export { Icon, type IconName } from "./Icon";

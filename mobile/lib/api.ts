@@ -1,5 +1,5 @@
 // mobile/lib/api.ts
-import type { Itinerary, Prefs } from "./types";
+import type { Itinerary, Prefs, TripType } from "./types";
 
 export interface GenerateRequest {
   location: string;
@@ -8,6 +8,9 @@ export interface GenerateRequest {
   destinationPlaceId?: string;
   startLocation?: string;
   startPlaceId?: string;
+  startDate?: string;   // ISO YYYY-MM-DD — calendar is source of truth
+  endDate?: string;
+  tripType?: TripType;  // default "round"
 }
 
 export interface GenerateResult {

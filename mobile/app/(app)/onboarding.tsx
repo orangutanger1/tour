@@ -1,39 +1,63 @@
 // mobile/app/(app)/onboarding.tsx
+// 8 one-question pages: destination → dates → interests → budget → pace →
+// transport → start point → review. One primary CTA per page.
 import { useEffect, useState } from "react";
 import { View, Pressable } from "react-native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
+import Animated, { FadeInRight } from "react-native-reanimated";
 import {
-  INTERESTS, MAX_TRIP_DAYS, stateFromProfile, stateFromRequest, canContinue, buildRequest,
-  shouldOfferRegions, type OnboardingState,
+  INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
+  buildRequest, tripDaysOf, shouldOfferRegions, type OnboardingState,
 } from "../../lib/onboarding";
+import { formatShort } from "../../lib/dates";
 import { getProfile } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/auth";
 import { useTripFlow } from "../../lib/tripFlow";
 import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
-import type { Prefs } from "../../lib/types";
-import { Screen, Text, Button, Chip, Input, Card, Stepper } from "../../components/ui";
+import type { Prefs, TripType } from "../../lib/types";
+import {
+  Screen, Text, Button, Chip, Input, Icon, OptionCard, ProgressBar,
+  RangeCalendar, Segmented, PressableScale, type IconName,
+} from "../../components/ui";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
-const BUDGETS: { value: Prefs["budget"]; label: string; desc: string }[] = [
-  { value: "low", label: "$ Budget", desc: "Street food, free sights, budget stays" },
-  { value: "mid", label: "$$ Comfortable", desc: "Casual eats, mix of sights, mid-range hotels" },
-  { value: "high", label: "$$$ Premium", desc: "Fine dining, splurges, upscale stays" },
+const INTEREST_ICONS: Record<string, IconName> = {
+  scenic: "camera", food: "restaurant", history: "library", nightlife: "moon",
+  outdoors: "leaf", art: "color-palette", shopping: "bag",
+};
+const BUDGETS: { value: Prefs["budget"]; label: string; desc: string; icon: IconName }[] = [
+  { value: "low", label: "$ Budget", desc: "Street food, free sights, budget stays", icon: "wallet" },
+  { value: "mid", label: "$$ Comfortable", desc: "Casual eats, mix of sights, mid-range hotels", icon: "card" },
+  { value: "high", label: "$$$ Premium", desc: "Fine dining, splurges, upscale stays", icon: "diamond" },
 ];
-const PACES: { value: Prefs["pace"]; label: string; desc: string }[] = [
-  { value: "relaxed", label: "Relaxed", desc: "2–3 stops/day" },
-  { value: "balanced", label: "Balanced", desc: "4–5 stops/day" },
-  { value: "packed", label: "Packed", desc: "6–8 stops/day" },
+const PACES: { value: Prefs["pace"]; label: string; desc: string; icon: IconName }[] = [
+  { value: "relaxed", label: "Relaxed", desc: "2–3 stops a day, long lunches", icon: "cafe" },
+  { value: "balanced", label: "Balanced", desc: "4–5 stops a day", icon: "walk" },
+  { value: "packed", label: "Packed", desc: "6–8 stops a day, see it all", icon: "flash" },
 ];
-const TRANSPORTS: { value: Prefs["transport"]; label: string; desc: string }[] = [
-  { value: "compact", label: "Compact", desc: "Stay close. Walkable cluster, minimal transit." },
-  { value: "balanced", label: "Balanced", desc: "City + nearby. Some driving." },
-  { value: "far", label: "Far-ranging", desc: "Cover a wide region. Longer legs OK." },
+const TRANSPORTS: { value: Prefs["transport"]; label: string; desc: string; icon: IconName }[] = [
+  { value: "compact", label: "Compact", desc: "Stay close. Walkable cluster, minimal transit.", icon: "footsteps" },
+  { value: "balanced", label: "Balanced", desc: "City + nearby. Some driving.", icon: "car" },
+  { value: "far", label: "Far-ranging", desc: "Cover a wide region. Longer legs OK.", icon: "airplane" },
 ];
-const DAY_PRESETS = [3, 5, 7, 10, 14];
+const TRIP_TYPES = [
+  { value: "round" as TripType, label: "Round trip" },
+  { value: "oneway" as TripType, label: "One way" },
+] as const;
+const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> = {
+  destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
+  dates: { title: "When?", sub: "Pick your start and end days." },
+  interests: { title: "What do you love?", sub: "Pick at least one." },
+  budget: { title: "What's the budget?" },
+  pace: { title: "What's your pace?" },
+  transport: { title: "How far will you roam?" },
+  start: { title: "Starting point?", sub: "Optional — home, airport, or hotel. Routes anchor here." },
+  review: { title: "Ready?", sub: "Tap any row to change it." },
+};
 
 export default function Onboarding() {
   const router = useRouter();
@@ -92,146 +116,234 @@ export default function Onboarding() {
     }
   }
 
+  const page = STEPS[step];
+  const prompt = PROMPTS[page];
+  const days = tripDaysOf(state);
+
+  const reviewRows: { label: string; value: string; step: number }[] = [
+    { label: "Destination", value: state.location, step: 0 },
+    {
+      label: "Dates",
+      value: state.startDate && state.endDate
+        ? `${formatShort(state.startDate)} → ${formatShort(state.endDate)} · ${days} ${days === 1 ? "day" : "days"} · ${state.tripType === "round" ? "Round trip" : "One way"}`
+        : "",
+      step: 1,
+    },
+    { label: "Interests", value: state.interests.join(", "), step: 2 },
+    { label: "Budget", value: BUDGETS.find((b) => b.value === state.budget)!.label, step: 3 },
+    { label: "Pace", value: PACES.find((p) => p.value === state.pace)!.label, step: 4 },
+    { label: "Getting around", value: TRANSPORTS.find((t) => t.value === state.transport)!.label, step: 5 },
+    ...(state.startLocation ? [{ label: "Start", value: state.startLocation, step: 6 }] : []),
+  ];
+
   return (
     <Screen scroll>
-      <View className="flex-row gap-2 mb-2">
-        {[0, 1, 2].map((i) => (
-          <View key={i} className={`h-1.5 flex-1 rounded-pill ${i <= step ? "bg-accent" : "bg-surface-2"}`} />
-        ))}
+      <View className="flex-row items-center gap-4 mb-2">
+        <Pressable
+          onPress={() => (step === 0 ? router.back() : setStep((s) => s - 1))}
+          hitSlop={8}
+          className="w-10 h-10 rounded-pill bg-surface-2 items-center justify-center"
+        >
+          <Icon name="chevron-back" size={18} />
+        </Pressable>
+        <ProgressBar progress={(step + 1) / STEP_COUNT} className="flex-1" />
       </View>
 
-      {step === 0 && (
-        <View className="gap-5">
-          <Text variant="title">What do you like?</Text>
+      <Animated.View key={step} entering={FadeInRight.springify().damping(18)} className="gap-5 flex-1">
+        <View className="gap-1">
+          <Text variant="display">{prompt.title}</Text>
+          {prompt.sub ? <Text variant="body" className="text-ink-muted">{prompt.sub}</Text> : null}
+        </View>
+
+        {page === "destination" ? (
+          <View className="gap-3">
+            <Input
+              placeholder="Try Lisbon, Tuscany, or Japan"
+              value={state.location}
+              onChangeText={(t) => { setState((s) => ({ ...s, location: t, destinationPlaceId: undefined })); setRegions([]); }}
+              autoCorrect={false}
+            />
+            {suggestions.length > 0 && state.location.trim().length >= 2 && !state.destinationPlaceId ? (
+              <View className="gap-2">
+                {suggestions.map((sug) => (
+                  <PressableScale
+                    key={sug.placeId}
+                    onPress={() => {
+                      setState((s) => ({ ...s, location: sug.text, destinationPlaceId: sug.placeId }));
+                      setSuggestions([]);
+                      setRegions([]);
+                      if (shouldOfferRegions(sug.types)) {
+                        suggestRegions({ placeId: sug.placeId, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey })
+                          .then(setRegions).catch(() => setRegions([]));
+                      }
+                    }}
+                    className="flex-row items-center gap-3 p-4 rounded-lg bg-surface border border-border"
+                  >
+                    <Icon name="location" size={18} color="#E11D48" />
+                    <Text variant="body" className="flex-1">{sug.text}</Text>
+                  </PressableScale>
+                ))}
+              </View>
+            ) : null}
+            {regions.length > 0 ? (
+              <View className="gap-2">
+                <Text variant="label">Big place — narrow it down?</Text>
+                {regions.map((r) => (
+                  <PressableScale
+                    key={r.placeId}
+                    onPress={() => {
+                      // Region carries a real placeId — set it so the destination is
+                      // geocoded (no global autocomplete on a bare label, real bias center).
+                      setState((s) => ({ ...s, location: r.label, destinationPlaceId: r.placeId }));
+                      setSuggestions([]);
+                      setRegions([]);
+                    }}
+                    className="p-4 rounded-lg bg-surface border border-border gap-0.5"
+                  >
+                    <Text variant="body">{r.label}</Text>
+                    <Text variant="caption">{r.hook}</Text>
+                  </PressableScale>
+                ))}
+                <Pressable onPress={() => setRegions([])} className="p-2">
+                  <Text variant="caption" className="text-ink-muted">Skip — search the whole area</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {page === "dates" ? (
+          <View className="gap-4">
+            <Segmented options={TRIP_TYPES} value={state.tripType} onChange={(t) => setState((s) => ({ ...s, tripType: t }))} />
+            <RangeCalendar
+              value={{ start: state.startDate, end: state.endDate }}
+              onChange={(r) => setState((s) => ({ ...s, startDate: r.start, endDate: r.end }))}
+            />
+            {state.startDate && state.endDate ? (
+              <Text variant="body" className="text-center text-ink-muted">
+                {formatShort(state.startDate)} → {formatShort(state.endDate)} · {days} {days === 1 ? "day" : "days"}
+              </Text>
+            ) : (
+              <Text variant="caption" className="text-center">Tap a start day, then an end day</Text>
+            )}
+          </View>
+        ) : null}
+
+        {page === "interests" ? (
           <View className="flex-row flex-wrap gap-2">
             {INTERESTS.map((i) => (
-              <Chip key={i} label={i} selected={state.interests.includes(i)} onPress={() => toggleInterest(i)} />
+              <Chip
+                key={i}
+                label={i}
+                selected={state.interests.includes(i)}
+                onPress={() => toggleInterest(i)}
+                icon={<Icon name={INTEREST_ICONS[i]} size={16} color={state.interests.includes(i) ? "#E11D48" : "#6B5560"} />}
+              />
             ))}
           </View>
-          <Text variant="label">Budget</Text>
-          <View className="gap-2">
+        ) : null}
+
+        {page === "budget" ? (
+          <View className="gap-3">
             {BUDGETS.map((b) => (
-              <Pressable key={b.value} onPress={() => setState((s) => ({ ...s, budget: b.value }))}
-                className={`p-3 rounded-lg border ${state.budget === b.value ? "bg-accent-soft border-accent" : "bg-surface border-border"}`}>
-                <Text variant="label" className={state.budget === b.value ? "text-accent" : "text-ink"}>{b.label}</Text>
-                <Text variant="caption">{b.desc}</Text>
-              </Pressable>
+              <OptionCard
+                key={b.value}
+                icon={<Icon name={b.icon} size={20} color={state.budget === b.value ? "#E11D48" : "#6B5560"} />}
+                title={b.label}
+                description={b.desc}
+                selected={state.budget === b.value}
+                onPress={() => setState((s) => ({ ...s, budget: b.value }))}
+              />
             ))}
           </View>
-          <Text variant="label">Pace</Text>
-          <View className="gap-2">
+        ) : null}
+
+        {page === "pace" ? (
+          <View className="gap-3">
             {PACES.map((p) => (
-              <Pressable key={p.value} onPress={() => setState((s) => ({ ...s, pace: p.value }))}
-                className={`p-3 rounded-lg border ${state.pace === p.value ? "bg-accent-soft border-accent" : "bg-surface border-border"}`}>
-                <Text variant="label" className={state.pace === p.value ? "text-accent" : "text-ink"}>{p.label}</Text>
-                <Text variant="caption">{p.desc}</Text>
-              </Pressable>
+              <OptionCard
+                key={p.value}
+                icon={<Icon name={p.icon} size={20} color={state.pace === p.value ? "#E11D48" : "#6B5560"} />}
+                title={p.label}
+                description={p.desc}
+                selected={state.pace === p.value}
+                onPress={() => setState((s) => ({ ...s, pace: p.value }))}
+              />
             ))}
           </View>
-          <Text variant="label">Transport</Text>
-          <View className="gap-2">
+        ) : null}
+
+        {page === "transport" ? (
+          <View className="gap-3">
             {TRANSPORTS.map((t) => (
-              <Pressable key={t.value} onPress={() => setState((s) => ({ ...s, transport: t.value }))}
-                className={`p-3 rounded-lg border ${state.transport === t.value ? "bg-accent-soft border-accent" : "bg-surface border-border"}`}>
-                <Text variant="label" className={state.transport === t.value ? "text-accent" : "text-ink"}>{t.label}</Text>
-                <Text variant="caption">{t.desc}</Text>
-              </Pressable>
+              <OptionCard
+                key={t.value}
+                icon={<Icon name={t.icon} size={20} color={state.transport === t.value ? "#E11D48" : "#6B5560"} />}
+                title={t.label}
+                description={t.desc}
+                selected={state.transport === t.value}
+                onPress={() => setState((s) => ({ ...s, transport: t.value }))}
+              />
             ))}
           </View>
-        </View>
-      )}
+        ) : null}
 
-      {step === 1 && (
-        <View className="gap-4">
-          <Text variant="title">Where and how long?</Text>
-          <Input placeholder="Location (e.g. Lisbon)" value={state.location}
-            onChangeText={(t) => { setState((s) => ({ ...s, location: t, destinationPlaceId: undefined })); setRegions([]); }} autoCorrect={false} />
-          {suggestions.length > 0 && state.location.trim().length >= 2 && !state.destinationPlaceId ? (
-            <View className="gap-1">
-              {suggestions.map((sug) => (
-                <Pressable key={sug.placeId} onPress={() => {
-                  setState((s) => ({ ...s, location: sug.text, destinationPlaceId: sug.placeId }));
-                  setSuggestions([]);
-                  setRegions([]);
-                  if (shouldOfferRegions(sug.types)) {
-                    suggestRegions({ placeId: sug.placeId, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey })
-                      .then(setRegions).catch(() => setRegions([]));
-                  }
-                }}
-                  className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
-                  <Text variant="body">{sug.text}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-          {regions.length > 0 ? (
-            <View className="gap-2">
-              <Text variant="label">Big place — narrow it down?</Text>
-              {regions.map((r) => (
-                <Pressable key={r.placeId} onPress={() => {
-                  // Region carries a real placeId — set it so the destination is
-                  // geocoded (no global autocomplete on a bare label, real bias center).
-                  setState((s) => ({ ...s, location: r.label, destinationPlaceId: r.placeId }));
-                  setSuggestions([]);
-                  setRegions([]);
-                }}
-                  className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
-                  <Text variant="body">{r.label}</Text>
-                  <Text variant="caption">{r.hook}</Text>
-                </Pressable>
-              ))}
-              <Pressable onPress={() => setRegions([])} className="p-2">
-                <Text variant="caption" className="text-ink-muted">Skip — search the whole area</Text>
-              </Pressable>
-            </View>
-          ) : null}
-          <Text variant="label">Days</Text>
-          <View className="flex-row flex-wrap gap-2">
-            {DAY_PRESETS.map((d) => (
-              <Chip key={d} label={String(d)} selected={state.tripDays === d} onPress={() => setState((s) => ({ ...s, tripDays: d }))} />
+        {page === "start" ? (
+          <View className="gap-3">
+            <Input
+              placeholder="Home, airport, or hotel"
+              value={state.startLocation ?? ""}
+              onChangeText={(t) => setState((s) => ({ ...s, startLocation: t, startPlaceId: undefined }))}
+              autoCorrect={false}
+            />
+            {startSuggestions.length > 0 && (state.startLocation ?? "").trim().length >= 2 && !state.startPlaceId ? (
+              <View className="gap-2">
+                {startSuggestions.map((sug) => (
+                  <PressableScale
+                    key={sug.placeId}
+                    onPress={() => { setState((s) => ({ ...s, startLocation: sug.text, startPlaceId: sug.placeId })); setStartSuggestions([]); }}
+                    className="flex-row items-center gap-3 p-4 rounded-lg bg-surface border border-border"
+                  >
+                    <Icon name="navigate" size={18} color="#E11D48" />
+                    <Text variant="body" className="flex-1">{sug.text}</Text>
+                  </PressableScale>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
+        {page === "review" ? (
+          <View className="gap-2">
+            {reviewRows.map((r) => (
+              <PressableScale
+                key={r.label}
+                onPress={() => setStep(r.step)}
+                className="flex-row items-center justify-between p-4 rounded-lg bg-surface border border-border"
+              >
+                <View className="flex-1 gap-0.5">
+                  <Text variant="label" className="text-ink-muted">{r.label}</Text>
+                  <Text variant="body">{r.value}</Text>
+                </View>
+                <Icon name="chevron-forward" size={16} color="#6B5560" />
+              </PressableScale>
             ))}
           </View>
-          <Stepper
-            value={state.tripDays}
-            min={1}
-            max={MAX_TRIP_DAYS}
-            suffix={state.tripDays === 1 ? "day" : "days"}
-            onChange={(d) => setState((s) => ({ ...s, tripDays: d }))}
+        ) : null}
+      </Animated.View>
+
+      <View className="gap-2 mt-6">
+        {page === "start" ? (
+          <Button
+            title="Skip"
+            variant="ghost"
+            onPress={() => { setState((s) => ({ ...s, startLocation: undefined, startPlaceId: undefined })); setStep((s) => s + 1); }}
           />
-          <Text variant="label">Starting point (optional)</Text>
-          <Input placeholder="Home, airport, or hotel" value={state.startLocation ?? ""}
-            onChangeText={(t) => setState((s) => ({ ...s, startLocation: t, startPlaceId: undefined }))} autoCorrect={false} />
-          {startSuggestions.length > 0 && (state.startLocation ?? "").trim().length >= 2 && !state.startPlaceId ? (
-            <View className="gap-1">
-              {startSuggestions.map((sug) => (
-                <Pressable key={sug.placeId} onPress={() => { setState((s) => ({ ...s, startLocation: sug.text, startPlaceId: sug.placeId })); setStartSuggestions([]); }}
-                  className="p-3 rounded-md bg-surface border border-border active:bg-surface-2">
-                  <Text variant="body">{sug.text}</Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
-        </View>
-      )}
-
-      {step === 2 && (
-        <Card className="gap-2">
-          <Text variant="title">Review</Text>
-          <Text variant="body">Location: {state.location}</Text>
-          <Text variant="body">Days: {state.tripDays}</Text>
-          <Text variant="body">Interests: {state.interests.join(", ")}</Text>
-          <Text variant="body">Budget: {state.budget} · Pace: {state.pace}</Text>
-          <Text variant="body">Transport: {state.transport}</Text>
-          {state.startLocation ? <Text variant="body">Start: {state.startLocation}</Text> : null}
-        </Card>
-      )}
-
-      <View className="flex-row justify-between gap-3 mt-4">
-        <Button title="Back" variant="ghost" onPress={() => (step === 0 ? router.back() : setStep((s) => s - 1))} className="flex-1" />
-        {step < 2 ? (
-          <Button title="Next" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} className="flex-1" />
+        ) : null}
+        {page === "review" ? (
+          <Button title="Generate my trip" size="lg" variant="gradient" onPress={onGenerate} />
         ) : (
-          <Button title="Generate" onPress={onGenerate} className="flex-1" />
+          <Button title="Continue" size="lg" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} />
         )}
       </View>
     </Screen>

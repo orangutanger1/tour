@@ -1,9 +1,13 @@
 // mobile/lib/onboarding.ts
-import type { Prefs } from "./types";
+import type { Prefs, TripType } from "./types";
 import type { GenerateRequest } from "./api";
+import { inclusiveDayCount } from "./dates";
 
 export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", "art", "shopping"] as const;
-export const MAX_TRIP_DAYS = 30;
+
+// One question per page; index = step number.
+export const STEPS = ["destination", "dates", "interests", "budget", "pace", "transport", "start", "review"] as const;
+export const STEP_COUNT = STEPS.length;
 
 export interface OnboardingState {
   interests: string[];
@@ -11,8 +15,10 @@ export interface OnboardingState {
   pace: Prefs["pace"];
   transport: Prefs["transport"];
   location: string;
-  tripDays: number;
   destinationPlaceId?: string;
+  startDate?: string;   // ISO YYYY-MM-DD
+  endDate?: string;
+  tripType: TripType;
   startLocation?: string;
   startPlaceId?: string;
 }
@@ -24,8 +30,10 @@ export function stateFromProfile(prefs: Prefs | null): OnboardingState {
     pace: prefs?.pace ?? "balanced",
     transport: prefs?.transport ?? "balanced",
     location: "",
-    tripDays: 3,
     destinationPlaceId: undefined,
+    startDate: undefined,
+    endDate: undefined,
+    tripType: "round",
     startLocation: undefined,
     startPlaceId: undefined,
   };
@@ -40,17 +48,27 @@ export function stateFromRequest(req: GenerateRequest): OnboardingState {
     pace: req.prefs.pace,
     transport: req.prefs.transport,
     location: req.location,
-    tripDays: req.tripDays,
     destinationPlaceId: req.destinationPlaceId,
+    startDate: req.startDate,
+    endDate: req.endDate,
+    tripType: req.tripType ?? "round",
     startLocation: req.startLocation,
     startPlaceId: req.startPlaceId,
   };
 }
 
+// Days derive from the calendar range — no separate tripDays state, no clamp.
+export function tripDaysOf(s: OnboardingState): number {
+  return s.startDate && s.endDate ? inclusiveDayCount(s.startDate, s.endDate) : 0;
+}
+
 export function canContinue(step: number, s: OnboardingState): boolean {
-  if (step === 0) return s.interests.length >= 1;
-  if (step === 1) return s.location.trim().length > 0 && s.tripDays >= 1 && s.tripDays <= MAX_TRIP_DAYS;
-  return true;
+  switch (STEPS[step]) {
+    case "destination": return s.location.trim().length > 0;
+    case "dates": return tripDaysOf(s) >= 1;
+    case "interests": return s.interests.length >= 1;
+    default: return true;
+  }
 }
 
 export function prefsFromState(s: OnboardingState): Prefs {
@@ -60,9 +78,12 @@ export function prefsFromState(s: OnboardingState): Prefs {
 export function buildRequest(s: OnboardingState): GenerateRequest {
   return {
     location: s.location.trim(),
-    tripDays: s.tripDays,
+    tripDays: tripDaysOf(s),
     prefs: prefsFromState(s),
     destinationPlaceId: s.destinationPlaceId,
+    startDate: s.startDate,
+    endDate: s.endDate,
+    tripType: s.tripType,
     startLocation: s.startLocation?.trim() || undefined,
     startPlaceId: s.startPlaceId,
   };
