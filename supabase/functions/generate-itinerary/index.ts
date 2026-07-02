@@ -61,7 +61,15 @@ Deno.serve(async (req: Request) => {
     saveTrip: async ({ userId: uid, req: r, itinerary }) => {
       const { data, error } = await admin
         .from("trips")
-        .insert({ user_id: uid, location: r.location, prefs: r.prefs, itinerary })
+        .insert({
+          user_id: uid,
+          location: r.location,
+          prefs: r.prefs,
+          itinerary,
+          start_date: r.startDate ?? null,
+          end_date: r.endDate ?? null,
+          trip_type: r.tripType ?? null,
+        })
         .select("id")
         .single();
       if (error) throw error;
