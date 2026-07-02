@@ -132,7 +132,11 @@ export default function Onboarding() {
     <Screen>
       <View className="flex-row items-center gap-4 mb-2">
         <Pressable
-          onPress={() => (step === 0 ? router.back() : setStep((s) => s - 1))}
+          onPress={() => {
+            if (step > 0) setStep((s) => s - 1);
+            else if (router.canGoBack()) router.back();
+            else router.replace("/"); // new users arrive via replace — no stack behind
+          }}
           hitSlop={8}
           className="w-10 h-10 rounded-pill bg-surface-2 items-center justify-center"
         >
