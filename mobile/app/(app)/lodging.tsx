@@ -1,5 +1,10 @@
 // mobile/app/(app)/lodging.tsx
-import { View, Text } from "react-native";
+import { Screen, EmptyState, Icon } from "../../components/ui";
+
 export default function Lodging() {
-  return <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}><Text>Lodging — 2b</Text></View>;
+  return (
+    <Screen>
+      <EmptyState icon={<Icon name="bed" size={28} color="#6B5560" />} title="Lodging" subtitle="Coming soon." />
+    </Screen>
+  );
 }

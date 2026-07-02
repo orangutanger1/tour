@@ -109,7 +109,7 @@ export default function AddPhoto() {
               <View className="flex-1"><Button title="Library" variant="secondary" onPress={() => pick(false)} /></View>
             </View>
             <Input placeholder={picked.length > 1 ? "Caption (optional, applied to all)" : "Caption (optional)"} value={caption} onChangeText={setCaption} />
-            <Button title={picked.length > 1 ? `Save ${picked.length} to passport` : "Save to passport"} onPress={save} />
+            <Button title={picked.length > 1 ? `Save ${picked.length} to passport` : "Save to passport"} size="lg" onPress={save} />
           </>
         )}
       </ScrollView>

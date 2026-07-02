@@ -5,7 +5,7 @@ export function Input({ className, ...props }: TextInputProps & { className?: st
   return (
     <TextInput
       placeholderTextColor="#6B5560"
-      className={`h-12 px-4 rounded-md bg-surface border border-border text-ink font-jakarta-medium text-[16px] ${className ?? ""}`}
+      className={`h-14 px-5 rounded-lg bg-surface border border-border text-ink font-jakarta-medium text-[16px] ${className ?? ""}`}
       {...props}
     />
   );

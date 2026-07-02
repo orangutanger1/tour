@@ -10,7 +10,7 @@ import {
   listPhotos, signedUrl, groupByAlbum, deletePhoto, updateCaption, reorderPhotos, toggleFavorite,
   type PhotoRow,
 } from "../../lib/photos";
-import { Screen, Text, Button, Loading, EmptyState } from "../../components/ui";
+import { Screen, Text, Button, Loading, EmptyState, Icon, PressableScale } from "../../components/ui";
 
 export default function Gallery() {
   const router = useRouter();
@@ -81,8 +81,8 @@ export default function Gallery() {
       </View>
 
       {photos.length === 0 ? (
-        <EmptyState title="No photos yet" subtitle="Add your first one from this trip."
-          action={<Button title="Add photo" onPress={() => router.push({ pathname: "/add-photo", params: { tripId } })} />} />
+        <EmptyState icon={<Icon name="images" size={28} color="#6B5560" />} title="No photos yet" subtitle="Add your first one from this trip."
+          action={<Button title="Add photo" size="lg" onPress={() => router.push({ pathname: "/add-photo", params: { tripId } })} />} />
       ) : editing ? (
         <View className="flex-1">
           <Text variant="caption" className="text-ink-muted mb-2">Hold a photo to drag it into place.</Text>
@@ -118,7 +118,7 @@ export default function Gallery() {
 
       {photos.length > 0 ? (
         <View className="absolute left-6 right-6 bottom-6">
-          <Button title="Add photo" onPress={() => router.push({ pathname: "/add-photo", params: { tripId } })} />
+          <Button title="Add photo" size="lg" onPress={() => router.push({ pathname: "/add-photo", params: { tripId } })} />
         </View>
       ) : null}
 
@@ -133,7 +133,7 @@ function Thumb({ url, isCover, isFavorite, onOpen, onFavorite }: {
   url?: string; isCover: boolean; isFavorite: boolean; onOpen: () => void; onFavorite: () => void;
 }) {
   return (
-    <Pressable onPress={onOpen}>
+    <PressableScale onPress={onOpen}>
       {url ? (
         <Image source={{ uri: url }} className="w-full aspect-square rounded-lg bg-surface" />
       ) : (
@@ -148,7 +148,7 @@ function Thumb({ url, isCover, isFavorite, onOpen, onFavorite }: {
         className="absolute bottom-1 right-1 w-7 h-7 rounded-full items-center justify-center bg-black/40">
         <Text className={`text-[15px] ${isFavorite ? "text-[#FFD43B]" : "text-white"}`}>{isFavorite ? "★" : "☆"}</Text>
       </Pressable>
-    </Pressable>
+    </PressableScale>
   );
 }
 
