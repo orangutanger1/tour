@@ -1,13 +1,14 @@
 // mobile/app/(auth)/sign-in.tsx
 import { View, Image, Pressable, Alert, ActivityIndicator } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { useAuth } from "../../lib/auth";
 import { useTripFlow } from "../../lib/tripFlow";
 import { upsertProfile } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
-import { Screen, Text } from "../../components/ui";
+import { Screen, Text, SUNSET } from "../../components/ui";
 
 export default function SignIn() {
   const { signInWithGoogle, signInWithApple } = useAuth();
@@ -35,11 +36,11 @@ export default function SignIn() {
   }
 
   return (
-    <Screen>
+    <Screen decor>
       <View className="flex-1 justify-center items-center gap-3">
-        <View className="w-16 h-16 rounded-xl bg-accent items-center justify-center">
+        <LinearGradient colors={SUNSET} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" }}>
           <Text variant="title" className="text-ink-inverse">T</Text>
-        </View>
+        </LinearGradient>
         <Text variant="display" className="text-center">{pendingRequest ? "Almost there" : "Welcome back"}</Text>
         <Text variant="body" className="text-center text-ink-muted">
           {pendingRequest ? "Sign in to save your trip and pick up anywhere." : "Sign in to see your trips and pick up anywhere."}
