@@ -106,12 +106,12 @@ export default function Trips() {
       <FlatList
         data={trips}
         keyExtractor={(t: TripSummary) => t.id}
-        contentContainerClassName="gap-3 pb-24"
+        contentContainerClassName="gap-3 pb-32"
         renderItem={({ item }) => (
           <TripCard trip={item} coverUrl={coverFor(item.id)} onPress={() => router.push({ pathname: "/itinerary", params: { tripId: item.id } })} />
         )}
       />
-      <View className="absolute left-6 right-6 bottom-6">
+      <View className="absolute left-6 right-6 bottom-28">
         <Button title="Plan a trip" onPress={() => router.push("/onboarding")} />
       </View>
     </Screen>

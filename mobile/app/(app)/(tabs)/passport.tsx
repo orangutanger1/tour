@@ -86,7 +86,7 @@ export default function Passport() {
           />
         ) : null}
       </View>
-      <ScrollView contentContainerClassName="pb-24">
+      <ScrollView contentContainerClassName="pb-32">
         {albums.map((album) => {
           const cover = coverPhoto(album.photos);
           return (
