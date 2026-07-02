@@ -75,7 +75,7 @@ cheap.
 | # | Page | Content | Can continue when |
 |---|------|---------|-------------------|
 | 1 | Where to? | autocomplete cards; region-narrowing offer kept | destination chosen (typed text or placeId) |
-| 2 | When? | trip-type segmented pill (Round trip / One way) + RangeCalendar; footer "Jul 12 → Jul 18 · 7 days" | valid range picked (1–30 days) |
+| 2 | When? | trip-type segmented pill (Round trip / One way) + RangeCalendar; footer "Jul 12 → Jul 18 · 7 days" | valid range picked (≥ 1 day) |
 | 3 | Interests | icon chip grid | ≥ 1 selected |
 | 4 | Budget | 3 OptionCards | always (has default) |
 | 5 | Pace | 3 OptionCards | always |
@@ -95,8 +95,9 @@ tap-through), edit-trip rehydration via `stateFromRequest`, signed-out flow
 ## 4. RangeCalendar
 
 - Pure TS date math in `lib/dates.ts`: month grid generation (weeks × 7),
-  range membership, inclusive day count, 30-day clamp (`MAX_TRIP_DAYS`),
-  display formatting. Unit-tested; no date library.
+  range membership, inclusive day count, display formatting. Unit-tested; no
+  date library. **No trip-length clamp** — `MAX_TRIP_DAYS` is removed from
+  `lib/onboarding.ts`; any range ≥ 1 day is valid (backend abuse guard aside).
 - UI (`ui/RangeCalendar.tsx`): month header with chevron paging, weekday row,
   7-column grid. Past dates disabled, today outlined. Tap = start; tap same or
   later date = end (same date → 1-day trip); tap earlier date = new start; once
@@ -114,6 +115,27 @@ tap-through), edit-trip rehydration via `stateFromRequest`, signed-out flow
   back near the start anchor (or first-day area when no anchor); oneway = day
   clusters ordered to progress across the region away from the start. Existing
   behavior is closest to oneway; round becomes the default. Deno tests for both.
+- **Long trips — leg-chunked generation** (the 30-day clamp is removed, so
+  length must scale). Research basis: production trip planners (Polarsteps et
+  al.) use LLMs that *select from grounded content, never invent*, plus
+  validators and hierarchical decomposition — route skeleton first, then
+  small per-chunk day planning. This app already grounds (placeId whitelist +
+  validate/sanitize/retry) and post-processes deterministically; the missing
+  piece for long trips is decomposition:
+  - Trips ≤ 7 days: pipeline unchanged (single curation).
+  - Trips > 7 days: split into consecutive **legs of ≤ 7 days**. Each leg gets
+    its own sub-area of the destination region (oneway = legs chain
+    progressively across the region; round = last leg returns near the start
+    anchor / first-leg area), its own POI fetch with a leg-local
+    `locationBias` (pool scales with trip length), and its own parallel
+    `curateItinerary` call validated against that leg's pool
+    (`expectedDays` = leg length). Legs concatenate into one itinerary; day
+    numbering continuous; downstream (assignDays per leg, routing, dwell,
+    meals, schedule) unchanged in behavior.
+  - Per-leg curation failure: retry that leg once (existing retry), then fail
+    the request with the existing 502 — no partial trips.
+  - Abuse guard: server rejects `tripDays > 365` (400). Not a UX clamp; the
+    calendar UI imposes no length limit.
 - Itinerary day headers show real dates when present: "Mon, Jul 14 · Day 1";
   fall back to "Day 1" for old trips.
 
@@ -141,8 +163,10 @@ not bouncy-cartoon.
 - `lib/dates.test.ts` — grid, range selection rules, inclusive count, clamp,
   formatting.
 - `lib/onboarding.test.ts` — updated: 8-step `canContinue`, new fields through
-  `buildRequest`/`stateFromRequest`, tripDays derivation.
-- Backend Deno tests — schema accepts new fields; sequencing round vs oneway.
+  `buildRequest`/`stateFromRequest`, tripDays derivation, no length clamp.
+- Backend Deno tests — schema accepts new fields; sequencing round vs oneway;
+  leg splitting (leg sizes, sub-area chaining round vs oneway, continuous day
+  numbers, per-leg validation, 365 abuse guard).
 - Existing jest + tsc suites stay green.
 
 ## 9. Phasing (implementation plan order)
@@ -150,7 +174,8 @@ not bouncy-cartoon.
 1. **Foundation**: tokens, Text/Button/Chip/Card restyle, Icon, ProgressBar,
    OptionCard, Blobs, motion primitives.
 2. **Onboarding + dates**: `lib/dates` + RangeCalendar, 8-page flow, request
-   fields, migration 0005, sequencing round/oneway, dated itinerary headers.
+   fields, migration 0005, sequencing round/oneway, leg-chunked long-trip
+   generation, dated itinerary headers.
 3. **Sweep**: tab bar + all remaining screens.
 
 Each phase lands as its own reviewable unit; all OTA-shippable (no new native
