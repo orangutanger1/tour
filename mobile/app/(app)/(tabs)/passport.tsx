@@ -69,7 +69,7 @@ export default function Passport() {
 
   const albums = groupByAlbum(photos);
   const toStack = (album: { photos: typeof photos }): StackPhoto[] =>
-    album.photos.map((p) => ({ id: p.id, url: urls[p.storagePath] ?? "", caption: p.caption }));
+    album.photos.map((p) => ({ id: p.id, url: urls[p.storagePath] ?? "", cacheKey: p.storagePath, caption: p.caption }));
 
   return (
     <Screen>
@@ -93,7 +93,7 @@ export default function Passport() {
             <AlbumSection
               key={album.tripId}
               title={tripName(album.tripId)}
-              photos={cover ? [{ id: cover.id, url: urls[cover.storagePath] ?? "", caption: cover.caption }, ...toStack(album).filter((s) => s.id !== cover.id)] : toStack(album)}
+              photos={cover ? [{ id: cover.id, url: urls[cover.storagePath] ?? "", cacheKey: cover.storagePath, caption: cover.caption }, ...toStack(album).filter((s) => s.id !== cover.id)] : toStack(album)}
               style={style}
               onOpen={() => router.push({ pathname: "/gallery", params: { tripId: album.tripId } })}
             />

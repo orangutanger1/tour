@@ -1,6 +1,6 @@
 // mobile/app/(app)/gallery.tsx
 import { useEffect, useState } from "react";
-import { View, ScrollView, FlatList, Image, Pressable, Modal, TextInput, Dimensions } from "react-native";
+import { View, ScrollView, FlatList, Pressable, Modal, TextInput, Dimensions } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import Sortable from "react-native-sortables";
@@ -10,7 +10,7 @@ import {
   listPhotos, signedUrl, groupByAlbum, deletePhoto, updateCaption, reorderPhotos, toggleFavorite,
   type PhotoRow,
 } from "../../lib/photos";
-import { Screen, Text, Button, Loading, EmptyState, Icon, PressableScale } from "../../components/ui";
+import { Screen, Text, Button, Loading, EmptyState, Icon, Photo, PressableScale } from "../../components/ui";
 
 export default function Gallery() {
   const router = useRouter();
@@ -95,7 +95,7 @@ export default function Gallery() {
             onDragEnd={({ data }) => commitOrder(data)}
             renderItem={({ item, index }) => (
               <View>
-                <Thumb url={urls[item.storagePath]} isCover={index === 0} isFavorite={item.isFavorite}
+                <Thumb url={urls[item.storagePath]} cacheKey={item.storagePath} isCover={index === 0} isFavorite={item.isFavorite}
                   onOpen={() => setLightboxIndex(index)} onFavorite={() => favorite(item)} />
                 <Button title="Cover" variant="ghost" size="sm" onPress={() => makeCoverId(item.id)} />
               </View>
@@ -106,7 +106,7 @@ export default function Gallery() {
         <ScrollView contentContainerClassName="flex-row flex-wrap gap-2 pb-24">
           {photos.map((photo, i) => (
             <View key={photo.id} className="w-[31%]">
-              <Thumb url={urls[photo.storagePath]} isCover={i === 0} isFavorite={photo.isFavorite}
+              <Thumb url={urls[photo.storagePath]} cacheKey={photo.storagePath} isCover={i === 0} isFavorite={photo.isFavorite}
                 onOpen={() => setLightboxIndex(i)} onFavorite={() => favorite(photo)} />
               {photo.caption ? (
                 <Text variant="caption" numberOfLines={1} className="mt-1">{photo.caption}</Text>
@@ -129,13 +129,13 @@ export default function Gallery() {
   );
 }
 
-function Thumb({ url, isCover, isFavorite, onOpen, onFavorite }: {
-  url?: string; isCover: boolean; isFavorite: boolean; onOpen: () => void; onFavorite: () => void;
+function Thumb({ url, cacheKey, isCover, isFavorite, onOpen, onFavorite }: {
+  url?: string; cacheKey: string; isCover: boolean; isFavorite: boolean; onOpen: () => void; onFavorite: () => void;
 }) {
   return (
     <PressableScale onPress={onOpen}>
       {url ? (
-        <Image source={{ uri: url }} className="w-full aspect-square rounded-lg bg-surface" />
+        <Photo uri={url} cacheKey={cacheKey} recyclingKey={cacheKey} className="w-full aspect-square rounded-lg bg-surface" />
       ) : (
         <View className="w-full aspect-square rounded-lg bg-surface" />
       )}
@@ -183,7 +183,7 @@ function Lightbox({ photos, urls, startIndex, onClose, onDelete, onSaveCaption, 
               renderItem={({ item }) => (
                 <View style={{ width }} className="items-center justify-center">
                   {urls[item.storagePath] ? (
-                    <Image source={{ uri: urls[item.storagePath] }} style={{ width: width - 24, aspectRatio: 1 }} className="rounded-xl" resizeMode="contain" />
+                    <Photo uri={urls[item.storagePath]} cacheKey={item.storagePath} recyclingKey={item.storagePath} style={{ width: width - 24, aspectRatio: 1 }} className="rounded-xl" contentFit="contain" />
                   ) : <View style={{ width: width - 24, aspectRatio: 1 }} className="rounded-xl bg-surface/10" />}
                 </View>
               )}

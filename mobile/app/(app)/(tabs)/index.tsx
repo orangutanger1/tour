@@ -30,7 +30,9 @@ export default function Trips() {
   });
   const coverFor = (tripId: string) => {
     const cover = covers.find((c) => c.tripId === tripId);
-    return cover ? coverUrlsQ.data?.[cover.storagePath] : undefined;
+    if (!cover) return undefined;
+    const url = coverUrlsQ.data?.[cover.storagePath];
+    return url ? { url, key: cover.storagePath } : undefined;
   };
 
   function Header() {
@@ -90,9 +92,12 @@ export default function Trips() {
         data={trips}
         keyExtractor={(t: TripSummary) => t.id}
         contentContainerClassName="gap-3 pb-32"
-        renderItem={({ item }) => (
-          <TripCard trip={item} coverUrl={coverFor(item.id)} onPress={() => router.push({ pathname: "/itinerary", params: { tripId: item.id } })} />
-        )}
+        renderItem={({ item }) => {
+          const cover = coverFor(item.id);
+          return (
+            <TripCard trip={item} coverUrl={cover?.url} coverKey={cover?.key} onPress={() => router.push({ pathname: "/itinerary", params: { tripId: item.id } })} />
+          );
+        }}
       />
       <View className="absolute left-6 right-6 bottom-28">
         <Button title="Plan a trip" size="lg" variant="gradient" onPress={() => router.push("/onboarding")} />

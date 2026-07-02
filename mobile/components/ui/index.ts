@@ -11,6 +11,7 @@ export { EmptyState } from "./EmptyState";
 export { Loading } from "./Loading";
 export { TripCard } from "./TripCard";
 export { PhotoStack, type StackPhoto } from "./PhotoStack";
+export { Photo } from "./Photo";
 export { AlbumSection } from "./AlbumSection";
 export { Icon, type IconName } from "./Icon";
 export { PressableScale, AnimatedPressable, AnimatedView } from "./PressableScale";

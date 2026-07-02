@@ -1,9 +1,10 @@
 // mobile/components/ui/PhotoStack.tsx
-import { View, Image, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Photo } from "./Photo";
 import { Text } from "./Text";
 import type { GalleryStyle } from "../../lib/profile";
 
-export interface StackPhoto { id: string; url: string; caption?: string | null; }
+export interface StackPhoto { id: string; url: string; cacheKey?: string; caption?: string | null; }
 
 // Deterministic fan angles so a stack looks the same across renders.
 const ANGLES = [-6, 5, -3, 7];
@@ -28,7 +29,7 @@ export function PhotoStack({ photos, style, onPress }: {
           className={`absolute rounded-md bg-white shadow-lg ${style === "polaroid" ? "p-2 pb-6" : "p-0.5"}`}
         >
           {photo.url ? (
-            <Image source={{ uri: photo.url }} className="w-32 h-32 rounded-sm" />
+            <Photo uri={photo.url} cacheKey={photo.cacheKey ?? photo.url} className="w-32 h-32 rounded-sm" />
           ) : (
             <View className="w-32 h-32 rounded-sm bg-surface" />
           )}
