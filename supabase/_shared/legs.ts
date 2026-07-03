@@ -60,3 +60,9 @@ export function splitRoundRobin<T>(items: T[], k: number): T[][] {
   items.forEach((item, i) => parts[i % k].push(item));
   return parts;
 }
+
+// Sparse destinations can't fill every requested day — a day needs ~2
+// attractions minimum. Never 0, never more than asked.
+export function effectiveTripDays(poolSize: number, tripDays: number): number {
+  return Math.min(tripDays, Math.max(1, Math.floor(poolSize / 2)));
+}

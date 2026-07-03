@@ -151,7 +151,8 @@ Deno.test("routes all days concurrently, not serially", async () => {
   const req = { location: "X", tripDays: 3, destinationPlaceId: "p1", prefs };
   const r = await runGenerate(req as any, {
     resolveDestination: () => Promise.resolve({ center: { lat: 1, lng: 2 }, viewport: null }),
-    fetchPois: (o: any) => Promise.resolve(o.kind === "lodging" ? [] : [{ placeId: "A", name: "A", kind: o.kind, lat: 1, lng: 2 }]),
+    // A rich-enough pool (6 unique attractions) so the sparse-pool day cap doesn't kick in.
+    fetchPois: (o: any) => Promise.resolve(o.kind === "lodging" ? [] : Array.from({ length: 6 }, (_, i) => ({ placeId: i === 0 ? "A" : `F${i}`, name: "F", kind: o.kind, lat: 1, lng: 2 }))),
     curate: () => Promise.resolve({ days: [day(1), day(2), day(3)] }),
     orderStops: async ({ stops }) => {
       active++; maxActive = Math.max(maxActive, active);
@@ -347,12 +348,10 @@ Deno.test("day 1 and last day anchor on the start location", async () => {
   const r = await runGenerate({ location: "X", tripDays: 3, destinationPlaceId: "DEST", startPlaceId: "START", prefs }, {
     resolveDestination: ({ placeId }) => Promise.resolve(
       placeId === "START" ? { center: { lat: 5, lng: 5 }, viewport: null } : { center: { lat: 1, lng: 1 }, viewport: null }),
+    // 6 unique attractions (rich enough pool) so the sparse-pool day cap doesn't kick in.
     fetchPois: ({ kind }) => Promise.resolve(
-      kind === "lodging" ? lodging : [
-        { placeId: "A1", name: "A1", kind: "attraction", lat: 0, lng: 0 },
-        { placeId: "A2", name: "A2", kind: "attraction", lat: 0, lng: 0 },
-        { placeId: "A3", name: "A3", kind: "attraction", lat: 0, lng: 0 },
-      ]),
+      kind === "lodging" ? lodging : [1, 2, 3, 4, 5, 6].map((n) => (
+        { placeId: `A${n}`, name: `A${n}`, kind: "attraction" as const, lat: 0, lng: 0 }))),
     curate: () => Promise.resolve(threeDay),
     orderStops: ({ stops, anchor }) => { anchors.push(anchor); return Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 0 })), polyline: undefined }); },
   });
@@ -389,8 +388,9 @@ function legDeps(kmPerLeg: { curateCalls: { tripDays: number; poolIds: string[] 
       if (o.kind !== "attraction") return Promise.resolve([]);
       const i = fetchCall++;
       const c = o.locationBias?.center ?? { lat: 5, lng: 5 };
-      // 8 pois per leg, clustered at the leg's bias center
-      return Promise.resolve(Array.from({ length: 8 }, (_, j) => ({
+      // 12 pois per leg (36 total — rich enough that the sparse-pool cap doesn't
+      // kick in for 16 requested days), clustered at the leg's bias center.
+      return Promise.resolve(Array.from({ length: 12 }, (_, j) => ({
         placeId: `L${i}-P${j}`, name: `P${j}`, kind: "attraction" as const,
         lat: c.lat + j * 0.001, lng: c.lng,
       })));
@@ -432,7 +432,8 @@ Deno.test("oneway: final day does NOT anchor back at the start location", async 
   const r = await runGenerate({ location: "X", tripDays: 3, destinationPlaceId: "DEST", startPlaceId: "START", tripType: "oneway", prefs }, {
     resolveDestination: ({ placeId }) => Promise.resolve(
       placeId === "START" ? { center: { lat: 5, lng: 5 }, viewport: null } : { center: { lat: 1, lng: 1 }, viewport: null }),
-    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : [1, 2, 3].map((d) => (
+    // 6 unique attractions (rich enough pool) so the sparse-pool day cap doesn't kick in.
+    fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : [1, 2, 3, 4, 5, 6].map((d) => (
       { placeId: `A${d}`, name: `A${d}`, kind: "attraction" as const, lat: 0, lng: 0 }))),
     curate: () => Promise.resolve(threeDay),
     orderStops: ({ stops, anchor }) => { anchors.push(anchor); return Promise.resolve({ ordered: stops.map((s) => ({ placeId: s.placeId, travelMinutesFromPrev: 0 })), polyline: undefined }); },
@@ -440,4 +441,39 @@ Deno.test("oneway: final day does NOT anchor back at the start location", async 
   assert(r.completed);
   assertEquals(anchors[0], { lat: 5, lng: 5 });   // day 1 still starts at start
   assertEquals(anchors[2], { lat: 9, lng: 9 });   // last day anchors at lodging, not start
+});
+
+function manyPois(n: number): Poi[] {
+  return Array.from({ length: n }, (_, i) => ({ placeId: `P${i}`, name: `P${i}`, kind: "attraction" as const, lat: i * 0.01, lng: 0 }));
+}
+
+Deno.test("sparse pool: 4 attractions + 12 requested days curates 2 days in one leg", async () => {
+  const curateCalls: number[] = [];
+  const pool = manyPois(4);
+  const fakeItin = (days: number): Itinerary => ({
+    days: Array.from({ length: days }, (_, i) => ({ day: i + 1, lodgingPlaceId: null, stops: [{ placeId: `P${i}`, name: `P${i}`, blurb: "x" }] })),
+  });
+  const r = await runGenerate({ location: "X", tripDays: 12, prefs }, {
+    fetchPois: ({ kind }) => Promise.resolve(kind === "attraction" ? pool : []),
+    curate: ({ tripDays }) => { curateCalls.push(tripDays); return Promise.resolve(fakeItin(tripDays)); },
+  });
+  assertEquals(curateCalls, [2]);            // one leg, 2 days — not planLegs(12) = [6,6]
+  assertEquals(r.completed!.days.length, 2);
+});
+
+Deno.test("rich pool keeps multi-leg split for long trips", async () => {
+  const curateCalls: number[] = [];
+  const pool = manyPois(40);
+  const fakeItin = (days: number, offset: number): Itinerary => ({
+    days: Array.from({ length: days }, (_, i) => ({ day: i + 1, lodgingPlaceId: null, stops: [{ placeId: `P${offset + i}`, name: "p", blurb: "x" }] })),
+  });
+  let call = 0;
+  const r = await runGenerate({ location: "X", tripDays: 12, prefs }, {
+    resolveDestination: () => Promise.resolve({ center: { lat: 5, lng: 5 }, viewport: { low: { lat: 0, lng: 0 }, high: { lat: 10, lng: 10 } } }),
+    fetchPois: ({ kind }) => Promise.resolve(kind === "attraction" ? pool : []),
+    curate: ({ tripDays }) => { curateCalls.push(tripDays); return Promise.resolve(fakeItin(tripDays, 20 * call++)); },
+  });
+  assertEquals(curateCalls.length, 2);       // still [6,6]
+  assertEquals(curateCalls[0] + curateCalls[1], 12);
+  assertEquals(r.completed!.days.length, 12);
 });

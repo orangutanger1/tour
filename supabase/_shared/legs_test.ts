@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "jsr:@std/assert";
-import { planLegs, legCenters, partitionByNearest, splitRoundRobin, MAX_LEG_DAYS } from "./legs.ts";
+import { planLegs, legCenters, partitionByNearest, splitRoundRobin, MAX_LEG_DAYS, effectiveTripDays } from "./legs.ts";
 
 Deno.test("planLegs: short trips are one leg", () => {
   assertEquals(planLegs(1), [1]);
@@ -46,4 +46,12 @@ Deno.test("partitionByNearest: disjoint pools by nearest center", () => {
 
 Deno.test("splitRoundRobin deals items evenly", () => {
   assertEquals(splitRoundRobin([1, 2, 3, 4, 5], 2), [[1, 3, 5], [2, 4]]);
+});
+
+Deno.test("effectiveTripDays caps days at floor(pool/2), min 1", () => {
+  assertEquals(effectiveTripDays(40, 12), 12);  // plenty
+  assertEquals(effectiveTripDays(10, 12), 5);   // sparse: 10 pois → 5 days
+  assertEquals(effectiveTripDays(1, 12), 1);    // never 0
+  assertEquals(effectiveTripDays(0, 3), 1);
+  assertEquals(effectiveTripDays(6, 2), 2);     // never exceeds request
 });

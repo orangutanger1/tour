@@ -3,7 +3,7 @@ import type { Itinerary, Poi, Prefs, Stop, TripType } from "../../_shared/types.
 import { CurationError } from "../../_shared/curate.ts";
 import { areaRadiusKm, haversineKm, type Viewport } from "../../_shared/area.ts";
 import { assignDays } from "../../_shared/cluster.ts";
-import { planLegs, legCenters, partitionByNearest, splitRoundRobin } from "../../_shared/legs.ts";
+import { planLegs, legCenters, partitionByNearest, splitRoundRobin, effectiveTripDays } from "../../_shared/legs.ts";
 import { sunsetLocalMinutes } from "../../_shared/solar.ts";
 import { buildDaySchedule } from "../../_shared/schedule.ts";
 
@@ -96,8 +96,16 @@ export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps):
       if (!seenIds.has(p.placeId)) { seenIds.add(p.placeId); pois.push(p); }
     }
   }
-  const legPools = multiLeg
-    ? (hasCenter ? partitionByNearest(pois, centers) : splitRoundRobin(pois, legSizes.length))
+  // Re-plan from the pool we actually got: sparse destinations cap the days
+  // (~2 attractions minimum per day), and a leg is only worth its own curation
+  // with ~8 attractions to choose from.
+  const plannedDays = effectiveTripDays(pois.length, body.tripDays);
+  let finalLegSizes = planLegs(plannedDays);
+  if (pois.length < 8 * finalLegSizes.length) finalLegSizes = [plannedDays];
+  const finalCenters = legCenters({ center: dest.center, viewport: dest.viewport, legs: finalLegSizes.length, tripType });
+  const finalMultiLeg = finalLegSizes.length > 1;
+  const legPools = finalMultiLeg
+    ? (hasCenter ? partitionByNearest(pois, finalCenters) : splitRoundRobin(pois, finalLegSizes.length))
     : [pois];
   const anchorPoi = lodging[0] ?? null;
 
@@ -106,7 +114,7 @@ export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps):
   // CurationError here propagates to the caller (startGenerate maps it to a
   // readable failure message on the trip row).
   const legItins: Itinerary[] = await Promise.all(legPools.map((pool, i) =>
-    deps.curate({ pois: pool, prefs: body.prefs, tripDays: legSizes[i] })));
+    deps.curate({ pois: pool, prefs: body.prefs, tripDays: finalLegSizes[i] })));
 
   // The LLM chose the places but can't see coordinates, so its day grouping
   // produced implausible cross-region driving. Re-group each leg's stops into
@@ -123,10 +131,10 @@ export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps):
     const grouped = assignDays({
       stops: li.days.flatMap((d) => d.stops),
       coords: coordsById,
-      tripDays: legSizes[i],
+      tripDays: finalLegSizes[i],
       maxDriveKm,
       start: i === 0 ? startCenter : null,
-      tripType: multiLeg ? undefined : tripType,
+      tripType: finalMultiLeg ? undefined : tripType,
     });
     for (const stops of grouped) allDays.push({ day: allDays.length + 1, lodgingPlaceId: null, stops });
   });
