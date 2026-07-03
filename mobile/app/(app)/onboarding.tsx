@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { View, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import Constants from "expo-constants";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Animated, { FadeInRight } from "react-native-reanimated";
 import {
@@ -61,6 +62,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
 export default function Onboarding() {
   const router = useRouter();
   const tripFlow = useTripFlow();
+  const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
   // Rehydrate an in-progress trip across remounts (e.g. "Edit trip" after a failed
   // generate does router.replace, which remounts this screen). lastRequest lives in
@@ -337,7 +339,10 @@ export default function Onboarding() {
       </Animated.View>
       </ScrollView>
 
-      <View className="gap-2 pt-3">
+      <View
+        className="gap-2 pt-3 border-t border-border bg-bg -mx-6 px-6"
+        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
+      >
         {page === "start" ? (
           <Button
             title="Skip"

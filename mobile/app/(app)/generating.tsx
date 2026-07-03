@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from "react-native-reanimated";
 import { useTripFlow } from "../../lib/tripFlow";
@@ -12,6 +13,7 @@ const PHASES = ["Scouting local favorites…", "Mapping smart routes…", "Timin
 export default function Generating() {
   const { status, error, lastRequest, generate } = useTripFlow();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (status === "success") router.replace("/itinerary");
@@ -41,7 +43,7 @@ export default function Generating() {
           <Text variant="title" className="text-center">Couldn't build your itinerary</Text>
           <Text variant="body" className="text-center text-ink-muted">{error?.message ?? "Something went wrong."}</Text>
         </View>
-        <View className="gap-3 pb-2">
+        <View className="gap-3 pt-3 border-t border-border bg-bg -mx-6 px-6" style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
           <Button title="Try again" size="lg" onPress={() => lastRequest && generate(lastRequest)} />
           <Button title="Edit trip" variant="ghost" onPress={() => router.replace("/onboarding")} />
         </View>
