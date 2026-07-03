@@ -14,7 +14,7 @@ function listSrc(dir: string): string[] {
   });
 }
 
-const files = ["app", "components"].flatMap((d) => listSrc(path.join(ROOT, d)));
+const files = ["app", "components", "lib"].flatMap((d) => listSrc(path.join(ROOT, d)));
 
 test("no className on reanimated components", () => {
   const re = /<(Animated\.[A-Za-z]+|AnimatedView|AnimatedPressable)\b[^>]*className/;

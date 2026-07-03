@@ -71,11 +71,20 @@ export async function waitForTrip(opts: {
   const intervalMs = opts.intervalMs ?? 3000;
   const maxMs = opts.maxMs ?? 300_000;
   const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  for (let waited = 0; waited <= maxMs; waited += intervalMs) {
-    const s = await opts.getStatus();
-    if (s?.status === "ready") return;
-    if (s?.status === "failed") throw new ApiError(502, s.errorMessage ?? "could not build itinerary");
+  let failures = 0;
+  for (let waited = 0; ; waited += intervalMs) {
+    try {
+      const s = await opts.getStatus();
+      failures = 0;
+      if (s?.status === "ready") return;
+      if (s?.status === "failed") throw new ApiError(502, s.errorMessage ?? "could not build itinerary");
+    } catch (e) {
+      // A blip mid-poll must not abort a 5-minute wait — "Try again" after a
+      // spurious error starts a duplicate generation. Tolerate short outages.
+      if (e instanceof ApiError) throw e;
+      if (++failures >= 3) throw e;
+    }
+    if (waited + intervalMs > maxMs) throw new ApiError(408, "Still building — check Your Trips in a minute.");
     await sleep(intervalMs);
   }
-  throw new ApiError(408, "Still building — check Your Trips in a minute.");
 }

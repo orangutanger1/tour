@@ -79,3 +79,19 @@ test("waitForTrip tolerates a null row (created but not yet visible)", async () 
   let i = 0;
   await expect(waitForTrip({ getStatus: async () => seq[i++], sleep: noSleep })).resolves.toBeUndefined();
 });
+
+test("waitForTrip tolerates transient getStatus failures", async () => {
+  const seq = [
+    () => Promise.reject(new Error("network blip")),
+    () => Promise.reject(new Error("network blip")),
+    () => Promise.resolve({ status: "ready" as const }),
+  ];
+  let i = 0;
+  await expect(waitForTrip({ getStatus: () => seq[i++](), sleep: noSleep })).resolves.toBeUndefined();
+});
+
+test("waitForTrip gives up after 3 consecutive getStatus failures", async () => {
+  await expect(
+    waitForTrip({ getStatus: () => Promise.reject(new Error("down")), sleep: noSleep }),
+  ).rejects.toThrow("down");
+});
