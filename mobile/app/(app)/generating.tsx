@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from "react-native-reanimated";
+import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from "react-native-reanimated";
 import { useTripFlow } from "../../lib/tripFlow";
-import { Screen, Text, Button, AnimatedView, Icon, SUNSET } from "../../components/ui";
+import { Screen, Text, Button, Icon, SUNSET } from "../../components/ui";
 
 const PHASES = ["Scouting local favorites…", "Mapping smart routes…", "Timing each day…"];
 
@@ -52,11 +52,11 @@ export default function Generating() {
   return (
     <Screen decor>
       <View className="flex-1 items-center justify-center gap-6">
-        <AnimatedView style={pulseStyle} className="rounded-pill overflow-hidden">
+        <Animated.View style={[pulseStyle, { borderRadius: 999, overflow: "hidden" }]}>
           <LinearGradient colors={SUNSET} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 96, height: 96, borderRadius: 999, alignItems: "center", justifyContent: "center" }}>
             <Icon name="airplane" size={36} color="#FFFFFF" />
           </LinearGradient>
-        </AnimatedView>
+        </Animated.View>
         <Text variant="title" className="text-center">Building your trip</Text>
         <Text variant="body" className="text-center text-ink-muted">{PHASES[phase]}</Text>
       </View>

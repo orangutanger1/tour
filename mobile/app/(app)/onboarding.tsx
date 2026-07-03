@@ -150,7 +150,7 @@ export default function Onboarding() {
           pushed it below the fold behind 5 suggestion rows. */}
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
       <ScrollView className="flex-1" contentContainerClassName="gap-4 py-2" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-      <Animated.View key={step} entering={FadeInRight.duration(200)} className="gap-5">
+      <Animated.View key={step} entering={FadeInRight.duration(200)} style={{ gap: 20 }}>
         <View className="gap-1">
           <Text variant="display">{prompt.title}</Text>
           {prompt.sub ? <Text variant="body" className="text-ink-muted">{prompt.sub}</Text> : null}
