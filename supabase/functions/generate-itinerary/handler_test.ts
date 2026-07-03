@@ -424,6 +424,43 @@ Deno.test("long trip: splits into legs, curates per leg in parallel pools, renum
   assertEquals(days.map((d) => d.day), Array.from({ length: 16 }, (_, i) => i + 1));
 });
 
+Deno.test("round trip long: return leg's pool is never empty (curation would fail the trip)", async () => {
+  // 15-day round trip → legs [5,5,5] with identical first/last centers (out and
+  // back). The real LLM curation cannot produce a valid leg from an empty pool,
+  // so a starved partition fails the whole trip with CurationError.
+  const curatePools: number[] = [];
+  const r = await runGenerate(
+    { location: "Tokyo", tripDays: 15, destinationPlaceId: "D", tripType: "round", prefs },
+    {
+      resolveDestination: () => Promise.resolve({
+        center: { lat: 5, lng: 5 },
+        viewport: { low: { lat: 0, lng: 0 }, high: { lat: 10, lng: 10 } },
+      }),
+      fetchPois: (o: any) => {
+        if (o.kind !== "attraction") return Promise.resolve([]);
+        const c = o.locationBias?.center ?? { lat: 5, lng: 5 };
+        return Promise.resolve(Array.from({ length: 15 }, (_, j) => ({
+          placeId: `${c.lat.toFixed(3)}-${j}`, name: `P${j}`, kind: "attraction" as const,
+          lat: c.lat + j * 0.001, lng: c.lng,
+        })));
+      },
+      curate: ({ pois, tripDays }: any) => {
+        curatePools.push(pois.length);
+        if (pois.length < tripDays) return Promise.reject(new CurationError("curation failed validation after retry"));
+        return Promise.resolve({
+          days: Array.from({ length: tripDays }, (_, d) => ({
+            day: d + 1, lodgingPlaceId: null,
+            stops: [{ placeId: pois[d].placeId, name: "s", blurb: "x" }],
+          })),
+        });
+      },
+    },
+  );
+  assertEquals(r.failure, undefined, `trip failed; curate pool sizes were [${curatePools}]`);
+  assert(r.completed, "trip must complete");
+  assertEquals(r.completed!.days.length, 15);
+});
+
 Deno.test("oneway: final day does NOT anchor back at the start location", async () => {
   const anchors: { lat: number; lng: number }[] = [];
   const threeDay: Itinerary = { days: [1, 2, 3].map((d) => ({

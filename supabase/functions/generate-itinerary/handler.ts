@@ -103,10 +103,19 @@ export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps):
   let finalLegSizes = planLegs(plannedDays);
   if (pois.length < 8 * finalLegSizes.length) finalLegSizes = [plannedDays];
   const finalCenters = legCenters({ center: dest.center, viewport: dest.viewport, legs: finalLegSizes.length, tripType });
-  const finalMultiLeg = finalLegSizes.length > 1;
-  const legPools = finalMultiLeg
+  let finalMultiLeg = finalLegSizes.length > 1;
+  let legPools = finalMultiLeg
     ? (hasCenter ? partitionByNearest(pois, finalCenters) : splitRoundRobin(pois, finalLegSizes.length))
     : [pois];
+  // A leg needs at least one place per day or its curation can never validate
+  // and the whole trip fails. Lopsided geography (all POIs bunched in one
+  // corner) can starve a leg even with a healthy total pool — collapse to a
+  // single whole-pool curation instead.
+  if (finalMultiLeg && legPools.some((p, i) => p.length < finalLegSizes[i])) {
+    finalLegSizes = [plannedDays];
+    finalMultiLeg = false;
+    legPools = [pois];
+  }
   const anchorPoi = lodging[0] ?? null;
 
   // Curate each leg in parallel — grounding + validation stay per-leg

@@ -39,14 +39,20 @@ export function legCenters(opts: { center: LatLng; viewport: Viewport; legs: num
 }
 
 // Disjoint pools: each item goes to its nearest leg center, so parallel
-// curations can never pick the same place twice.
+// curations can never pick the same place twice. Round trips duplicate the
+// start-area center for the first and last legs, so distance ties are real:
+// break them toward the emptier pool or the return leg starves to an empty
+// pool and its curation fails the whole trip.
 export function partitionByNearest<T extends { lat: number; lng: number }>(items: T[], centers: LatLng[]): T[][] {
   const parts: T[][] = centers.map(() => []);
+  const TIE_KM = 1e-9;
   for (const item of items) {
     let best = 0, bestD = Infinity;
     for (let i = 0; i < centers.length; i++) {
       const d = haversineKm(centers[i], { lat: item.lat, lng: item.lng });
-      if (d < bestD) { bestD = d; best = i; }
+      if (d < bestD - TIE_KM || (Math.abs(d - bestD) <= TIE_KM && parts[i].length < parts[best].length)) {
+        bestD = d; best = i;
+      }
     }
     parts[best].push(item);
   }

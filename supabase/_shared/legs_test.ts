@@ -44,6 +44,20 @@ Deno.test("partitionByNearest: disjoint pools by nearest center", () => {
   assertEquals(parts[1].map((i) => i.id), ["b"]);
 });
 
+Deno.test("partitionByNearest: identical centers (round-trip first/last leg) split ties instead of starving a pool", () => {
+  // Round trips duplicate the start-area center for the first and last legs.
+  // First-wins tie-breaking sent every tied item to the first pool, leaving the
+  // return leg empty — curation then failed the whole trip.
+  const c = { lat: 0, lng: 0 };
+  const centers = [c, { lat: 10, lng: 10 }, { ...c }];
+  const items = Array.from({ length: 10 }, (_, i) => ({ id: `n${i}`, lat: 0.001 * i, lng: 0 }));
+  const parts = partitionByNearest(items, centers);
+  assertEquals(parts[1].length, 0); // far center gets nothing — items all sit near the start
+  assert(parts[0].length > 0 && parts[2].length > 0, `tied pools must both be fed, got [${parts.map((p) => p.length)}]`);
+  assert(Math.abs(parts[0].length - parts[2].length) <= 1, "ties split evenly");
+  assertEquals(parts[0].length + parts[2].length, 10); // disjoint, nothing lost
+});
+
 Deno.test("splitRoundRobin deals items evenly", () => {
   assertEquals(splitRoundRobin([1, 2, 3, 4, 5], 2), [[1, 3, 5], [2, 4]]);
 });
