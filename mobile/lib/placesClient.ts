@@ -22,7 +22,7 @@ export async function autocompletePlaces(opts: {
   const data = await res.json() as { suggestions?: { text: string; placeId: string; types?: string[] }[] };
   return (data.suggestions ?? [])
     .map((s) => ({ text: s.text, placeId: s.placeId, types: s.types ?? [] }))
-    .filter((s) => s.text && s.placeId); // never render an icon-only row
+    .filter((s) => s.text.trim().length > 0 && s.placeId); // never render an icon-only row
 }
 
 export interface Region { label: string; hook: string; placeId: string; }

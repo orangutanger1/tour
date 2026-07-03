@@ -27,3 +27,16 @@ Deno.test("maps upstream error to 502", async () => {
   const r = await handleAutocomplete({ query: "Lis" }, { search: () => Promise.reject(new Error("boom")) });
   assertEquals(r.status, 502);
 });
+
+Deno.test("filters blank suggestions from upstream", async () => {
+  const deps = {
+    search: () => Promise.resolve([
+      { text: "  ", placeId: "p1", types: [] },
+      { text: "Kyoto, Japan", placeId: "p2", types: ["locality"] },
+      { text: "No id", placeId: "", types: [] },
+    ]),
+  };
+  const r = await handleAutocomplete({ query: "Kyo" }, deps);
+  assertEquals(r.status, 200);
+  assertEquals((r.body as { suggestions: unknown[] }).suggestions, [{ text: "Kyoto, Japan", placeId: "p2", types: ["locality"] }]);
+});

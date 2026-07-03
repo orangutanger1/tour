@@ -37,6 +37,7 @@ it("drops suggestions with empty text or placeId", async () => {
     json: async () => ({ suggestions: [
       { text: "", placeId: "p1" },
       { text: "Japan", placeId: "" },
+      { text: "   ", placeId: "p3" },
       { text: "Japan", placeId: "p2" },
     ] }),
   }) as unknown as typeof fetch;

@@ -10,7 +10,8 @@ export async function handleAutocomplete(
   const query = (body?.query ?? "").trim();
   if (query.length < 2) return { status: 400, body: { error: "query too short" } };
   try {
-    const suggestions = await deps.search(query, body?.addresses);
+    const suggestions = (await deps.search(query, body?.addresses))
+      .filter((s) => s.text?.trim() && s.placeId);
     return { status: 200, body: { suggestions } };
   } catch (e) {
     console.error("places-autocomplete upstream error:", e instanceof Error ? e.message : e);
