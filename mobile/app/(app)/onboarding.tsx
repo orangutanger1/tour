@@ -49,7 +49,7 @@ const TRIP_TYPES = [
 ] as const;
 const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> = {
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
-  dates: { title: "When?", sub: "Pick your start and end days." },
+  dates: { title: "When?" },
   interests: { title: "What do you love?", sub: "Pick at least one." },
   budget: { title: "What's the budget?" },
   pace: { title: "What's your pace?" },
@@ -111,6 +111,9 @@ export default function Onboarding() {
   const page = STEPS[step];
   const prompt = PROMPTS[page];
   const days = tripDaysOf(state);
+  const datesSub = state.tripType === "round"
+    ? "Pick start and end days — you'll loop back to where you began."
+    : "Pick start and end days — you'll end in a different area.";
 
   const reviewRows: { label: string; value: string; step: number }[] = [
     { label: "Destination", value: state.location, step: 0 },
@@ -153,7 +156,11 @@ export default function Onboarding() {
       <Animated.View key={step} entering={FadeInRight.duration(200)} style={{ gap: 20 }}>
         <View className="gap-1">
           <Text variant="display">{prompt.title}</Text>
-          {prompt.sub ? <Text variant="body" className="text-ink-muted">{prompt.sub}</Text> : null}
+          {page === "dates" ? (
+            <Text variant="body" className="text-ink-muted">{datesSub}</Text>
+          ) : prompt.sub ? (
+            <Text variant="body" className="text-ink-muted">{prompt.sub}</Text>
+          ) : null}
         </View>
 
         {page === "destination" ? (
@@ -220,13 +227,9 @@ export default function Onboarding() {
               value={{ start: state.startDate, end: state.endDate }}
               onChange={(r) => setState((s) => ({ ...s, startDate: r.start, endDate: r.end }))}
             />
-            {state.startDate && state.endDate ? (
-              <Text variant="body" className="text-center text-ink-muted">
-                {formatShort(state.startDate)} → {formatShort(state.endDate)} · {days} {days === 1 ? "day" : "days"}
-              </Text>
-            ) : (
+            {!state.startDate || !state.endDate ? (
               <Text variant="caption" className="text-center">Tap a start day, then an end day</Text>
-            )}
+            ) : null}
           </View>
         ) : null}
 
