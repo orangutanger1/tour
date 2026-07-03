@@ -8,7 +8,7 @@ import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
 import { getTrip } from "../../lib/trips";
 import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
-import { formatDayHeader, addDaysISO } from "../../lib/dates";
+import { formatDayHeader, addDaysISO, inclusiveDayCount } from "../../lib/dates";
 import { Screen, Text, Button, Card, EmptyState, Loading } from "../../components/ui";
 
 export default function Itinerary() {
@@ -100,6 +100,8 @@ export default function Itinerary() {
 
   // Saved trips carry dates on the row; a just-generated trip only has them on the request.
   const startDate = tripId ? tripQuery.data?.startDate : flow.lastRequest?.startDate;
+  const endDate = tripId ? tripQuery.data?.endDate : flow.lastRequest?.endDate;
+  const requestedDays = startDate && endDate ? inclusiveDayCount(startDate, endDate) : null;
   const sections = days.map((d) => ({
     title: startDate ? `${formatDayHeader(addDaysISO(startDate, d.day - 1))} · Day ${d.day}` : `Day ${d.day}`,
     lodging: d.lodgingPlaceId ? coords[d.lodgingPlaceId]?.name : undefined,
@@ -129,6 +131,11 @@ export default function Itinerary() {
         </Pressable>
       </View>
       <Toggle />
+      {requestedDays != null && requestedDays > days.length ? (
+        <Text variant="caption" className="text-center mb-2">
+          Only enough local highlights for {days.length} full {days.length === 1 ? "day" : "days"} — shorter than your dates.
+        </Text>
+      ) : null}
       {view === "map" ? (
         <View className="flex-1">
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2 pb-2" className="grow-0 mb-1">
