@@ -92,23 +92,20 @@ export async function listPhotos(client: SupabaseClient): Promise<PhotoRow[]> {
   return ((data ?? []) as PhotoDbRow[]).map(rowToPhoto);
 }
 
+// 7-day tokens: the URL map is persisted across launches, and <Photo>'s
+// cacheKey pins the disk cache to the path, so a long-lived token only ever
+// matters for images the device hasn't cached yet.
+const SIGNED_URL_TTL_S = 7 * 24 * 3600;
+
 export async function signedUrls(
   client: SupabaseClient, paths: string[],
 ): Promise<Record<string, string>> {
   if (paths.length === 0) return {};
-  const { data, error } = await client.storage.from(BUCKET).createSignedUrls(paths, 3600);
+  const { data, error } = await client.storage.from(BUCKET).createSignedUrls(paths, SIGNED_URL_TTL_S);
   if (error) throw error;
   const out: Record<string, string> = {};
   for (const item of data ?? []) if (item.signedUrl && item.path) out[item.path] = item.signedUrl;
   return out;
-}
-
-// One signed URL, cached per-path by the caller so add/delete/reorder don't churn
-// every image's token (which would make <Image> re-download). 1h expiry.
-export async function signedUrl(client: SupabaseClient, path: string): Promise<string> {
-  const { data, error } = await client.storage.from(BUCKET).createSignedUrl(path, 3600);
-  if (error) throw error;
-  return data.signedUrl;
 }
 
 // ponytail: filename id — not crypto-grade, only needs to be unique per upload.

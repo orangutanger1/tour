@@ -15,6 +15,7 @@ export default function Account() {
 
   async function onSignOut() {
     await signOut();
+    qc.clear(); // cache now persists across launches — don't leak this account's data to the next
     router.replace("/");
   }
 

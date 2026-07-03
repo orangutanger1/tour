@@ -2,14 +2,15 @@
 import { useEffect, useState } from "react";
 import { View, ScrollView, FlatList, Pressable, Modal, TextInput, Dimensions } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Sortable from "react-native-sortables";
 import { supabase } from "../../lib/supabase";
 import { listTrips } from "../../lib/trips";
 import {
-  listPhotos, signedUrl, groupByAlbum, deletePhoto, updateCaption, reorderPhotos, toggleFavorite,
+  listPhotos, groupByAlbum, deletePhoto, updateCaption, reorderPhotos, toggleFavorite,
   type PhotoRow,
 } from "../../lib/photos";
+import { usePhotoUrls } from "../../lib/photoUrls";
 import { Screen, Text, Button, Loading, EmptyState, Icon, Photo, PressableScale } from "../../components/ui";
 
 export default function Gallery() {
@@ -25,21 +26,9 @@ export default function Gallery() {
   const album = groupByAlbum(all).find((a) => a.tripId === tripId);
   const photos = album?.photos ?? [];
 
-  // One query per path, cached long: add/delete/reorder no longer re-sign every
-  // image (which changed the uri and forced <Image> to re-download).
-  const urls = useQueries({
-    queries: photos.map((p) => ({
-      queryKey: ["photoUrl", p.storagePath],
-      queryFn: () => signedUrl(supabase, p.storagePath),
-      staleTime: 50 * 60_000,
-      enabled: !!p.storagePath,
-    })),
-    combine: (res) => {
-      const m: Record<string, string> = {};
-      photos.forEach((p, i) => { const u = res[i]?.data; if (u) m[p.storagePath] = u; });
-      return m;
-    },
-  });
+  // Sign for the whole library, not just this album: same query key as
+  // Passport, so opening an album is a cache hit instead of a fresh roundtrip.
+  const urls = usePhotoUrls(all);
 
   const title = tripsQ.data?.find((t) => t.id === tripId)?.location ?? "Album";
   const refresh = () => qc.invalidateQueries({ queryKey: ["photos"] });

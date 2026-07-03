@@ -2,15 +2,16 @@
 import { View, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { AppleMaps } from "expo-maps";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../../lib/auth";
 import { supabase } from "../../../lib/supabase";
 import { getStopCoords } from "../../../lib/poi";
 import { getGalleryStyle } from "../../../lib/profile";
 import { listTrips } from "../../../lib/trips";
 import {
-  listPhotos, signedUrl, groupByAlbum, distinctPlaceIds, coverPhoto, clusterPins,
+  listPhotos, groupByAlbum, distinctPlaceIds, coverPhoto, clusterPins,
 } from "../../../lib/photos";
+import { usePhotoUrls } from "../../../lib/photoUrls";
 import { Screen, Text, Button, Loading, EmptyState, Icon, AlbumSection, type StackPhoto } from "../../../components/ui";
 
 // ponytail: one cell size for the small header map. Make it zoom-reactive later if needed.
@@ -31,19 +32,7 @@ export default function Passport() {
     queryFn: () => getStopCoords(supabase, distinctPlaceIds(photos)),
     enabled: photos.length > 0,
   });
-  const urls = useQueries({
-    queries: photos.map((p) => ({
-      queryKey: ["photoUrl", p.storagePath],
-      queryFn: () => signedUrl(supabase, p.storagePath),
-      staleTime: 50 * 60_000,
-      enabled: !!p.storagePath,
-    })),
-    combine: (res) => {
-      const m: Record<string, string> = {};
-      photos.forEach((p, i) => { const u = res[i]?.data; if (u) m[p.storagePath] = u; });
-      return m;
-    },
-  });
+  const urls = usePhotoUrls(photos);
 
   if (!session) {
     return <Screen><EmptyState icon={<Icon name="book" size={28} color="#6B5560" />} title="Passport" subtitle="Sign in to start your travel passport." /></Screen>;

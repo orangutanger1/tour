@@ -103,6 +103,20 @@ test("signedUrls maps path to signedUrl", async () => {
   expect(await signedUrls(client, ["u/t1/x.jpg"])).toEqual({ "u/t1/x.jpg": "https://signed/x" });
 });
 
+test("signedUrls signs for 7 days so persisted URLs survive relaunches", async () => {
+  let expiry: number | undefined;
+  const client = {
+    storage: { from: () => ({
+      createSignedUrls: async (_paths: string[], expiresIn: number) => {
+        expiry = expiresIn;
+        return { data: [], error: null };
+      },
+    }) },
+  } as unknown as SupabaseClient;
+  await signedUrls(client, ["u/t1/x.jpg"]);
+  expect(expiry).toBe(7 * 24 * 3600);
+});
+
 test("base64ToBytes decodes a known string", () => {
   // "Man" => TWFu
   expect(Array.from(base64ToBytes("TWFu"))).toEqual([77, 97, 110]);
