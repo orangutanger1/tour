@@ -95,9 +95,9 @@ export default function Email() {
 
         <View className="pb-2">
           {phase === "email" ? (
-            <Button title="Send code" size="lg" variant="gradient" disabled={!emailOk} loading={busy} onPress={send} />
+            <Button title="Send code" size="lg" disabled={!emailOk} loading={busy} onPress={send} />
           ) : (
-            <Button title="Verify" size="lg" variant="gradient" disabled={code.length !== 6} loading={busy} onPress={verify} />
+            <Button title="Verify" size="lg" disabled={code.length !== 6} loading={busy} onPress={verify} />
           )}
         </View>
       </KeyboardAvoidingView>
