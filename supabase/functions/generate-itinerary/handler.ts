@@ -30,32 +30,23 @@ export interface GenerateRequest {
   tripType?: TripType;  // default "round"
 }
 
-export interface HandlerDeps {
-  countTripsToday(userId: string): Promise<number>;
+export interface PipelineDeps {
   resolveDestination(opts: { placeId?: string; location: string }): Promise<{ center: { lat: number; lng: number }; viewport: Viewport }>;
   fetchPois(opts: { location: string; kind: Poi["kind"]; prefs: Prefs; locationBias?: { center: { lat: number; lng: number }; radiusKm: number } }): Promise<Poi[]>;
   curate(opts: { pois: Poi[]; prefs: Prefs; tripDays: number }): Promise<Itinerary>;
   orderStops(opts: { stops: Poi[]; anchor: { lat: number; lng: number }; travelMode?: "WALK" | "DRIVE" }): Promise<{ ordered: { placeId: string; travelMinutesFromPrev: number }[]; polyline?: string }>;
-  saveTrip(opts: { userId: string; req: GenerateRequest; itinerary: Itinerary }): Promise<string>;
   fetchDwell(placeIds: string[]): Promise<Record<string, number>>;
   saveDwell(entries: { placeId: string; minutes: number }[]): Promise<void>;
 }
 
-export async function handleGenerate(
-  body: GenerateRequest,
-  userId: string,
-  deps: HandlerDeps,
-): Promise<{ status: number; body: unknown }> {
-  if (!body || body.tripDays < 1) {
-    return { status: 400, body: { error: "tripDays must be >= 1" } };
-  }
-  if (body.tripDays > 365) {
-    return { status: 400, body: { error: "tripDays must be <= 365" } };
-  }
-  if ((await deps.countTripsToday(userId)) >= DAILY_CAP) {
-    return { status: 429, body: { error: "daily generation limit reached" } };
-  }
+export interface StartDeps extends PipelineDeps {
+  countTripsToday(userId: string): Promise<number>;   // implementation must exclude failed rows
+  createPendingTrip(opts: { userId: string; req: GenerateRequest }): Promise<string>;
+  completeTrip(opts: { tripId: string; itinerary: Itinerary }): Promise<void>;
+  failTrip(opts: { tripId: string; message: string }): Promise<void>;
+}
 
+export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps): Promise<Itinerary> {
   const dest = await deps.resolveDestination({ placeId: body.destinationPlaceId, location: body.location });
   const radiusKm = areaRadiusKm({ viewport: dest.viewport, transport: body.prefs.transport });
   const hasCenter = dest.center.lat !== 0 || dest.center.lng !== 0;
@@ -111,15 +102,11 @@ export async function handleGenerate(
   const anchorPoi = lodging[0] ?? null;
 
   // Curate each leg in parallel — grounding + validation stay per-leg
-  // (expectedDays = leg length, placeId whitelist = that leg's pool).
-  let legItins: Itinerary[];
-  try {
-    legItins = await Promise.all(legPools.map((pool, i) =>
-      deps.curate({ pois: pool, prefs: body.prefs, tripDays: legSizes[i] })));
-  } catch (e) {
-    if (e instanceof CurationError) return { status: 502, body: { error: "could not build itinerary" } };
-    throw e;
-  }
+  // (expectedDays = leg length, placeId whitelist = that leg's pool). A
+  // CurationError here propagates to the caller (startGenerate maps it to a
+  // readable failure message on the trip row).
+  const legItins: Itinerary[] = await Promise.all(legPools.map((pool, i) =>
+    deps.curate({ pois: pool, prefs: body.prefs, tripDays: legSizes[i] })));
 
   // The LLM chose the places but can't see coordinates, so its day grouping
   // produced implausible cross-region driving. Re-group each leg's stops into
@@ -230,6 +217,36 @@ export async function handleGenerate(
     day.stops = buildDaySchedule({ attractions: day.stops, sunsetMinutes: sunsetMin, lunch, dinner });
   });
 
-  const tripId = await deps.saveTrip({ userId, req: body, itinerary });
-  return { status: 200, body: { tripId, itinerary } };
+  return itinerary;
+}
+
+export async function startGenerate(
+  body: GenerateRequest,
+  userId: string,
+  deps: StartDeps,
+): Promise<{ status: number; body: unknown; run?: () => Promise<void> }> {
+  if (!body || body.tripDays < 1) {
+    return { status: 400, body: { error: "tripDays must be >= 1" } };
+  }
+  if (body.tripDays > 365) {
+    return { status: 400, body: { error: "tripDays must be <= 365" } };
+  }
+  if ((await deps.countTripsToday(userId)) >= DAILY_CAP) {
+    return { status: 429, body: { error: "daily generation limit reached" } };
+  }
+
+  const tripId = await deps.createPendingTrip({ userId, req: body });
+  // run() never throws: the caller hands it to EdgeRuntime.waitUntil where a
+  // rejection would be an unobserved crash. Every failure lands in the trip row.
+  const run = async () => {
+    try {
+      const itinerary = await buildItinerary(body, deps);
+      await deps.completeTrip({ tripId, itinerary });
+    } catch (e) {
+      console.error("generate pipeline failed:", e instanceof Error ? e.stack ?? e.message : e);
+      const message = e instanceof CurationError ? "could not build itinerary" : "itinerary generation failed";
+      await deps.failTrip({ tripId, message }).catch((err) => console.error("failTrip failed:", err));
+    }
+  };
+  return { status: 202, body: { tripId }, run };
 }

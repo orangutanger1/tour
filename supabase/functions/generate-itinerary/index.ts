@@ -1,6 +1,6 @@
 // supabase/functions/generate-itinerary/index.ts
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { handleGenerate, type GenerateRequest, type HandlerDeps } from "./handler.ts";
+import { startGenerate, type GenerateRequest, type StartDeps } from "./handler.ts";
 import { fetchPois, fetchPlaceDetails } from "../../_shared/places.ts";
 import { curateItinerary } from "../../_shared/curate.ts";
 import { orderStops } from "../../_shared/routes.ts";
@@ -32,13 +32,14 @@ Deno.serve(async (req: Request) => {
 
   const body = await req.json() as GenerateRequest;
 
-  const deps: HandlerDeps = {
+  const deps: StartDeps = {
     countTripsToday: async (uid) => {
       const { count } = await admin
         .from("trips")
         .select("id", { count: "exact", head: true })
         .eq("user_id", uid)
-        .gte("created_at", startOfTodayISO());
+        .gte("created_at", startOfTodayISO())
+        .neq("status", "failed");
       return count ?? 0;
     },
     resolveDestination: async ({ placeId, location: _location }) => {
@@ -58,14 +59,15 @@ Deno.serve(async (req: Request) => {
       }),
     curate: (o) => curateItinerary({ ...o, llmComplete }),
     orderStops: (o) => orderStops({ ...o, httpFetch: fetch, apiKey: ROUTES_KEY }),
-    saveTrip: async ({ userId: uid, req: r, itinerary }) => {
+    createPendingTrip: async ({ userId: uid, req: r }) => {
       const { data, error } = await admin
         .from("trips")
         .insert({
           user_id: uid,
           location: r.location,
           prefs: r.prefs,
-          itinerary,
+          itinerary: null,
+          status: "generating",
           start_date: r.startDate ?? null,
           end_date: r.endDate ?? null,
           trip_type: r.tripType ?? null,
@@ -74,6 +76,14 @@ Deno.serve(async (req: Request) => {
         .single();
       if (error) throw error;
       return data.id as string;
+    },
+    completeTrip: async ({ tripId, itinerary }) => {
+      const { error } = await admin.from("trips").update({ itinerary, status: "ready", error_message: null }).eq("id", tripId);
+      if (error) throw error;
+    },
+    failTrip: async ({ tripId, message }) => {
+      const { error } = await admin.from("trips").update({ status: "failed", error_message: message }).eq("id", tripId);
+      if (error) throw error;
     },
     fetchDwell: async (placeIds) => {
       if (placeIds.length === 0) return {};
@@ -89,7 +99,12 @@ Deno.serve(async (req: Request) => {
   // Catch it, log the real cause, and return a readable 500 so the client can
   // surface something better than "request failed (546)".
   try {
-    const result = await handleGenerate(body, userId, deps);
+    const result = await startGenerate(body, userId, deps);
+    if (result.run) {
+      const runtime = (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime;
+      if (runtime?.waitUntil) runtime.waitUntil(result.run());
+      else result.run(); // local dev fallback: fire-and-forget
+    }
     return new Response(JSON.stringify(result.body), {
       status: result.status,
       headers: { "Content-Type": "application/json" },
