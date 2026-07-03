@@ -18,6 +18,15 @@ export interface GenerateResult {
   itinerary: Itinerary;
 }
 
+export interface StartGenerateResult {
+  tripId: string;
+}
+
+export interface TripGenStatus {
+  status: "generating" | "ready" | "failed";
+  errorMessage?: string;
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -30,7 +39,7 @@ export async function generateItinerary(opts: {
   accessToken: string;
   baseUrl: string;
   fetchImpl?: typeof fetch;
-}): Promise<GenerateResult> {
+}): Promise<StartGenerateResult> {
   const doFetch = opts.fetchImpl ?? fetch;
   const res = await doFetch(`${opts.baseUrl}/functions/v1/generate-itinerary`, {
     method: "POST",
@@ -48,5 +57,25 @@ export async function generateItinerary(opts: {
     } catch { /* non-JSON body */ }
     throw new ApiError(res.status, message);
   }
-  return await res.json() as GenerateResult;
+  return await res.json() as StartGenerateResult;
+}
+
+// Poll until the background pipeline lands. The row may briefly be invisible
+// right after the 202 (read-after-write lag) — treat null as "keep waiting".
+export async function waitForTrip(opts: {
+  getStatus: () => Promise<TripGenStatus | null>;
+  intervalMs?: number;
+  maxMs?: number;
+  sleep?: (ms: number) => Promise<void>;
+}): Promise<void> {
+  const intervalMs = opts.intervalMs ?? 3000;
+  const maxMs = opts.maxMs ?? 300_000;
+  const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  for (let waited = 0; waited <= maxMs; waited += intervalMs) {
+    const s = await opts.getStatus();
+    if (s?.status === "ready") return;
+    if (s?.status === "failed") throw new ApiError(502, s.errorMessage ?? "could not build itinerary");
+    await sleep(intervalMs);
+  }
+  throw new ApiError(408, "Still building — check Your Trips in a minute.");
 }

@@ -1,4 +1,4 @@
-import { listTrips, getTrip, tripDayCount, type TripSummary } from "./trips";
+import { listTrips, getTrip, tripDayCount, getTripStatus, type TripSummary } from "./trips";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Itinerary } from "./types";
 
@@ -7,11 +7,17 @@ const row = { id: "t1", location: "Kyoto", itinerary: itin, created_at: "2026-06
 
 function listClient(result: { data: unknown; error: unknown }): SupabaseClient {
   return {
-    from: () => ({ select: () => ({ order: async () => result }) }),
+    from: () => ({ select: () => ({ eq: () => ({ order: async () => result }) }) }),
   } as unknown as SupabaseClient;
 }
 
 function getClient(result: { data: unknown; error: unknown }): SupabaseClient {
+  return {
+    from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => result }) }) }) }),
+  } as unknown as SupabaseClient;
+}
+
+function statusClient(result: { data: unknown; error: unknown }): SupabaseClient {
   return {
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => result }) }) }),
   } as unknown as SupabaseClient;
@@ -61,4 +67,18 @@ test("tripDayCount counts itinerary days", () => {
 
 test("tripDayCount is 0 for empty itinerary", () => {
   expect(tripDayCount({ id: "t1", location: "x", itinerary: { days: [] }, createdAt: "" })).toBe(0);
+});
+
+test("getTripStatus maps row", async () => {
+  const s = await getTripStatus(statusClient({ data: { status: "failed", error_message: "boom" }, error: null }), "t1");
+  expect(s).toEqual({ status: "failed", errorMessage: "boom" });
+});
+
+test("getTripStatus null when row missing", async () => {
+  expect(await getTripStatus(statusClient({ data: null, error: null }), "t1")).toBeNull();
+});
+
+test("getTripStatus defaults pre-migration rows to ready", async () => {
+  const s = await getTripStatus(statusClient({ data: { status: null, error_message: null }, error: null }), "t1");
+  expect(s).toEqual({ status: "ready", errorMessage: undefined });
 });
