@@ -55,3 +55,28 @@ export function displayName(
   const local = user?.email?.split("@")[0];
   return local || "Traveler";
 }
+
+export function generateUsername(base: string, rand: () => number = Math.random): string {
+  const first = base.trim().split(/\s+/)[0]?.toLowerCase().replace(/[^a-z0-9]/g, "") || "traveler";
+  const digits = String(Math.floor(rand() * 10000)).padStart(4, "0");
+  return `${first}${digits}`;
+}
+
+// Generate-once handle. Unique constraint arbitrates collisions: retry with
+// fresh digits, give up after 3 (retried on the next account visit).
+export async function ensureUsername(
+  client: SupabaseClient,
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
+  rand?: () => number,
+): Promise<string | null> {
+  const { data } = await client.from("profiles").select("username").eq("id", user.id).maybeSingle();
+  const existing = (data as { username?: string | null } | null)?.username;
+  if (existing) return existing;
+  for (let i = 0; i < 3; i++) {
+    const candidate = generateUsername(displayName(user), rand);
+    const { error } = await client.from("profiles").upsert({ id: user.id, username: candidate });
+    if (!error) return candidate;
+    if ((error as { code?: string }).code !== "23505") throw error;
+  }
+  return null;
+}

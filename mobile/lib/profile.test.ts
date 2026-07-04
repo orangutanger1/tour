@@ -1,4 +1,4 @@
-import { getProfile, upsertProfile, getGalleryStyle, displayName } from "./profile";
+import { getProfile, upsertProfile, getGalleryStyle, displayName, generateUsername, ensureUsername } from "./profile";
 import type { Prefs } from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -95,4 +95,62 @@ test("displayName falls back to email local-part", () => {
 test("displayName falls back to Traveler with no data", () => {
   expect(displayName(null)).toBe("Traveler");
   expect(displayName({ email: "", user_metadata: {} })).toBe("Traveler");
+});
+
+test("generateUsername takes first name, lowercased, plus 4 digits", () => {
+  expect(generateUsername("Tash Any", () => 0.4821)).toBe("tash4821");
+});
+
+test("generateUsername strips non-alphanumerics and pads digits", () => {
+  expect(generateUsername("Й!  ", () => 0.0007)).toBe("traveler0007");
+  expect(generateUsername("O'Brien Smith", () => 0.9999)).toBe("obrien9999");
+});
+
+function usernameClient(opts: {
+  existing?: string | null;
+  upsertErrors?: ({ code: string } | null)[];
+  onUpsert?: (row: unknown) => void;
+}): SupabaseClient {
+  let call = 0;
+  return {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { username: opts.existing ?? null }, error: null }) }) }),
+      upsert: async (row: unknown) => {
+        opts.onUpsert?.(row);
+        return { error: (opts.upsertErrors ?? [null])[Math.min(call++, (opts.upsertErrors ?? [null]).length - 1)] };
+      },
+    }),
+  } as unknown as SupabaseClient;
+}
+
+const u1 = { id: "u1", email: "tashany@gmail.com", user_metadata: {} };
+
+test("ensureUsername returns existing username without writing", async () => {
+  let wrote = false;
+  const client = usernameClient({ existing: "tash1111", onUpsert: () => { wrote = true; } });
+  expect(await ensureUsername(client, u1)).toBe("tash1111");
+  expect(wrote).toBe(false);
+});
+
+test("ensureUsername generates and upserts id + username", async () => {
+  let row: unknown;
+  const client = usernameClient({ onUpsert: (r) => { row = r; } });
+  const name = await ensureUsername(client, u1, () => 0.1234);
+  expect(name).toBe("tashany1234");
+  expect(row).toEqual({ id: "u1", username: "tashany1234" });
+});
+
+test("ensureUsername retries on unique collision", async () => {
+  const client = usernameClient({ upsertErrors: [{ code: "23505" }, null] });
+  expect(await ensureUsername(client, u1)).toMatch(/^tashany\d{4}$/);
+});
+
+test("ensureUsername gives up after 3 collisions", async () => {
+  const client = usernameClient({ upsertErrors: [{ code: "23505" }] });
+  expect(await ensureUsername(client, u1)).toBeNull();
+});
+
+test("ensureUsername throws on non-collision error", async () => {
+  const client = usernameClient({ upsertErrors: [{ code: "42501" }] });
+  await expect(ensureUsername(client, u1)).rejects.toBeTruthy();
 });
