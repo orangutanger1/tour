@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import { getGalleryStyle, setGalleryStyle, type GalleryStyle } from "../../lib/profile";
+import { getGalleryStyle, setGalleryStyle, displayName, type GalleryStyle } from "../../lib/profile";
 import { Screen, Text, Button, Card, Icon, PressableScale } from "../../components/ui";
 
 export default function Account() {
@@ -32,9 +32,9 @@ export default function Account() {
       </View>
       <Card className="flex-row items-center gap-3">
         <Icon name="person" size={20} color="#6B5560" />
-        <View className="flex-1 gap-1">
-          <Text variant="caption">Signed in as</Text>
-          <Text variant="heading">{user?.email ?? user?.id ?? "—"}</Text>
+        <View className="flex-1 gap-0.5">
+          <Text variant="heading" numberOfLines={1}>{displayName(user)}</Text>
+          {user?.email ? <Text variant="caption" numberOfLines={1}>{user.email}</Text> : null}
         </View>
       </Card>
       <Card className="gap-2 mt-4">

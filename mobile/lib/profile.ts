@@ -42,3 +42,16 @@ export async function setGalleryStyle(client: SupabaseClient, style: GalleryStyl
   const { error } = await client.from("profiles").upsert({ id: user.id, default_prefs: { ...prefs, galleryStyle: style } });
   if (error) throw error;
 }
+
+// Human name for the account header: OAuth metadata (Google/Apple) first,
+// then the email local-part for OTP sign-ins.
+export function displayName(
+  user: { email?: string | null; user_metadata?: Record<string, unknown> } | null | undefined,
+): string {
+  const meta = user?.user_metadata ?? {};
+  const metaName = [meta.full_name, meta.name]
+    .find((v): v is string => typeof v === "string" && v.trim().length > 0);
+  if (metaName) return metaName.trim();
+  const local = user?.email?.split("@")[0];
+  return local || "Traveler";
+}

@@ -1,4 +1,4 @@
-import { getProfile, upsertProfile, getGalleryStyle } from "./profile";
+import { getProfile, upsertProfile, getGalleryStyle, displayName } from "./profile";
 import type { Prefs } from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -74,4 +74,25 @@ test("getGalleryStyle defaults to polaroid when absent", async () => {
 test("getGalleryStyle defaults to polaroid when no user", async () => {
   const client = { auth: { getUser: async () => ({ data: { user: null } }) } } as unknown as SupabaseClient;
   expect(await getGalleryStyle(client)).toBe("polaroid");
+});
+
+test("displayName prefers user_metadata.full_name", () => {
+  expect(displayName({ email: "t@x.com", user_metadata: { full_name: "Tash Any", name: "Other" } })).toBe("Tash Any");
+});
+
+test("displayName falls back to user_metadata.name", () => {
+  expect(displayName({ email: "t@x.com", user_metadata: { name: "Tash" } })).toBe("Tash");
+});
+
+test("displayName skips blank metadata names", () => {
+  expect(displayName({ email: "tashany@gmail.com", user_metadata: { full_name: "  " } })).toBe("tashany");
+});
+
+test("displayName falls back to email local-part", () => {
+  expect(displayName({ email: "tashany@gmail.com", user_metadata: {} })).toBe("tashany");
+});
+
+test("displayName falls back to Traveler with no data", () => {
+  expect(displayName(null)).toBe("Traveler");
+  expect(displayName({ email: "", user_metadata: {} })).toBe("Traveler");
 });
