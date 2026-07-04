@@ -13,6 +13,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LLM_KEY = Deno.env.get("LLM_API_KEY")!;
 const LLM_ENDPOINT = Deno.env.get("LLM_ENDPOINT")!;
 const LLM_MODEL = Deno.env.get("LLM_MODEL")!;
+const RC_SECRET = Deno.env.get("REVENUECAT_SECRET_KEY") ?? "";
 const llmComplete = makeLlmComplete({ httpFetch: fetch, apiKey: LLM_KEY, endpoint: LLM_ENDPOINT, model: LLM_MODEL });
 
 function startOfTodayISO(): string {
@@ -41,6 +42,29 @@ Deno.serve(async (req: Request) => {
         .gte("created_at", startOfTodayISO())
         .neq("status", "failed");
       return count ?? 0;
+    },
+    countTotalTrips: async (uid) => {
+      const { count } = await admin
+        .from("trips")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", uid)
+        .neq("status", "failed");
+      return count ?? 0;
+    },
+    // app_user_id === Supabase user id (Purchases.logIn). Throws on any
+    // problem — startGenerate fails open, so an unset secret or RC outage
+    // never blocks generation.
+    hasProEntitlement: async (uid) => {
+      if (!RC_SECRET) throw new Error("REVENUECAT_SECRET_KEY not set");
+      const res = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`, {
+        headers: { Authorization: `Bearer ${RC_SECRET}` },
+      });
+      if (!res.ok) throw new Error(`revenuecat ${res.status}`);
+      const body = await res.json() as {
+        subscriber?: { entitlements?: Record<string, { expires_date: string | null }> };
+      };
+      const ent = body.subscriber?.entitlements?.pro;
+      return !!ent && (ent.expires_date === null || Date.parse(ent.expires_date) > Date.now());
     },
     resolveDestination: async ({ placeId, location: _location }) => {
       if (placeId) {
