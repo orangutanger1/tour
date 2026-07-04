@@ -108,13 +108,14 @@ test("generateUsername strips non-alphanumerics and pads digits", () => {
 
 function usernameClient(opts: {
   existing?: string | null;
+  selectError?: { code: string } | null;
   upsertErrors?: ({ code: string } | null)[];
   onUpsert?: (row: unknown) => void;
 }): SupabaseClient {
   let call = 0;
   return {
     from: () => ({
-      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { username: opts.existing ?? null }, error: null }) }) }),
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: opts.selectError ? null : { username: opts.existing ?? null }, error: opts.selectError ?? null }) }) }),
       upsert: async (row: unknown) => {
         opts.onUpsert?.(row);
         return { error: (opts.upsertErrors ?? [null])[Math.min(call++, (opts.upsertErrors ?? [null]).length - 1)] };
@@ -153,4 +154,11 @@ test("ensureUsername gives up after 3 collisions", async () => {
 test("ensureUsername throws on non-collision error", async () => {
   const client = usernameClient({ upsertErrors: [{ code: "42501" }] });
   await expect(ensureUsername(client, u1)).rejects.toBeTruthy();
+});
+
+test("ensureUsername throws when the username read fails", async () => {
+  let wrote = false;
+  const client = usernameClient({ selectError: { code: "XX000" }, onUpsert: () => { wrote = true; } });
+  await expect(ensureUsername(client, u1)).rejects.toBeTruthy();
+  expect(wrote).toBe(false);
 });

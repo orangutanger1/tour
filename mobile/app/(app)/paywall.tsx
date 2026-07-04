@@ -42,7 +42,9 @@ export default function Paywall() {
   const router = useRouter();
   const [packages, setPackages] = useState<PurchasesPackage[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const busy = buying || restoring;
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function Paywall() {
       .then((pkgs) => {
         setPackages(pkgs);
         setSelected(pkgs.find((p) => p.packageType === "ANNUAL")?.identifier ?? pkgs[0]?.identifier ?? null);
+        if (pkgs.length === 0) setError("Plans aren't available right now — try again later.");
       })
       .catch(() => setError("Couldn't load plans. Check your connection and try again."));
   }, []);
@@ -57,19 +60,19 @@ export default function Paywall() {
   async function buy() {
     const pkg = packages?.find((p) => p.identifier === selected);
     if (!pkg) return;
-    setBusy(true);
+    setBuying(true);
     setError(null);
     try {
       if (await purchasePro(pkg)) router.back();
     } catch {
       setError("Purchase failed — you weren't charged. Try again.");
     } finally {
-      setBusy(false);
+      setBuying(false);
     }
   }
 
   async function onRestore() {
-    setBusy(true);
+    setRestoring(true);
     setError(null);
     try {
       if (await restorePro()) router.back();
@@ -77,7 +80,7 @@ export default function Paywall() {
     } catch {
       setError("Restore failed. Try again.");
     } finally {
-      setBusy(false);
+      setRestoring(false);
     }
   }
 
@@ -121,7 +124,7 @@ export default function Paywall() {
 
       {error ? <Text variant="caption" className="text-error text-center">{error}</Text> : null}
 
-      <Button title="Start Pro" size="lg" variant="gradient" loading={busy} disabled={!selected} onPress={buy} />
+      <Button title="Start Pro" size="lg" variant="gradient" loading={buying} disabled={!selected || restoring} onPress={buy} />
 
       <PressableScale onPress={onRestore} disabled={busy} className="items-center py-2">
         <Text variant="label" className="text-accent">Restore Purchases</Text>

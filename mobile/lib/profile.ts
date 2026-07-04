@@ -69,7 +69,8 @@ export async function ensureUsername(
   user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
   rand?: () => number,
 ): Promise<string | null> {
-  const { data } = await client.from("profiles").select("username").eq("id", user.id).maybeSingle();
+  const { data, error: selectError } = await client.from("profiles").select("username").eq("id", user.id).maybeSingle();
+  if (selectError) throw selectError;
   const existing = (data as { username?: string | null } | null)?.username;
   if (existing) return existing;
   for (let i = 0; i < 3; i++) {
