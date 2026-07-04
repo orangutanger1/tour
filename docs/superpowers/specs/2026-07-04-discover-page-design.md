@@ -165,9 +165,10 @@ header (~28pt). App-icon replacement is a separate decision, not in scope.
   `countries`, `flagEmoji`, remote-row mapping incl. unknown-enum drop.
 - `lib/destinations.ts` — dataset invariants test: unique ids, coverage requirements
   (themes/continents/tags/countries minimums), all fields non-empty, valid enums.
-- `onboarding` — unit/render: `destination` param seeds location; lastRequest wins.
-- Render tests: discover sections render from dataset; discover-list filters by
-  param; destination-detail renders fields + unknown-id empty state.
+- `onboarding` — unit: pure `destination`-param seeding helper; lastRequest wins.
+- Screens: no render-test infra in repo (project pattern = logic tests + tsc +
+  device smoke); screens verified by tsc and device smoke.
+- Image URLs: scripted HTTP check that every `imageUrl` returns 200.
 - `GlassPress` — passes the `noAnimatedClassName` guard (no className on Animated).
 - Migration RLS: authenticated select-only (verified at deploy time).
 
