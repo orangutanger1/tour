@@ -17,6 +17,7 @@ import {
 } from "@expo-google-fonts/plus-jakarta-sans";
 import { AuthProvider } from "../lib/auth";
 import { TripFlowProvider } from "../lib/tripFlow";
+import { configurePurchases } from "../lib/purchases";
 
 // staleTime keeps remounts (e.g. tab back to Passport) from refetching everything.
 // Mutations that change data invalidate their keys explicitly.
@@ -28,6 +29,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, refetchOnWindowFocus: false, gcTime: PERSIST_MS } },
 });
 const persister = createAsyncStoragePersister({ storage: AsyncStorage });
+configurePurchases();
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({

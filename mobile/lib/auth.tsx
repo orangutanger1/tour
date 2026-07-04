@@ -5,6 +5,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
+import { logInPurchases, logOutPurchases } from "./purchases";
 
 const extra = Constants.expoConfig?.extra as { googleWebClientId: string; googleIosClientId: string };
 GoogleSignin.configure({ webClientId: extra.googleWebClientId, iosClientId: extra.googleIosClientId });
@@ -30,8 +31,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      if (data.session?.user) logInPurchases(data.session.user.id);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s?.user) logInPurchases(s.user.id);
+      else logOutPurchases();
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
