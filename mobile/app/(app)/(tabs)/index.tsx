@@ -6,6 +6,8 @@ import { useAuth } from "../../../lib/auth";
 import { supabase } from "../../../lib/supabase";
 import { listTrips, type TripSummary } from "../../../lib/trips";
 import { listPhotos, signedUrls, groupByAlbum, coverPhoto } from "../../../lib/photos";
+import { usePro } from "../../../lib/purchases";
+import { canStartNewTrip } from "../../../lib/gate";
 import { Screen, Text, Button, TripCard, EmptyState, Loading } from "../../../components/ui";
 
 export default function Trips() {
@@ -34,6 +36,13 @@ export default function Trips() {
     const url = coverUrlsQ.data?.[cover.storagePath];
     return url ? { url, key: cover.storagePath } : undefined;
   };
+
+  const { isPro } = usePro();
+  // listTrips() only ever surfaces status="ready" rows (generating/failed are
+  // excluded server-side), so every trip here already counts toward the limit.
+  const tripCount = (trips ?? []).length;
+  const startTrip = () =>
+    router.push(canStartNewTrip(tripCount, isPro) ? "/onboarding" : "/paywall");
 
   function Header() {
     return (
@@ -79,7 +88,7 @@ export default function Trips() {
           </Text>
         </View>
         <View className="pb-24">
-          <Button title="Plan a trip" size="lg" variant="gradient" onPress={() => router.push("/onboarding")} />
+          <Button title="Plan a trip" size="lg" variant="gradient" onPress={startTrip} />
         </View>
       </Screen>
     );
@@ -100,7 +109,7 @@ export default function Trips() {
         }}
       />
       <View className="absolute left-6 right-6 bottom-28">
-        <Button title="Plan a trip" size="lg" variant="gradient" onPress={() => router.push("/onboarding")} />
+        <Button title="Plan a trip" size="lg" variant="gradient" onPress={startTrip} />
       </View>
     </Screen>
   );

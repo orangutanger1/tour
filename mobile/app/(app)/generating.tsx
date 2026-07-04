@@ -41,10 +41,18 @@ export default function Generating() {
       <Screen>
         <View className="flex-1 items-center justify-center gap-3">
           <Text variant="title" className="text-center">Couldn't build your itinerary</Text>
-          <Text variant="body" className="text-center text-ink-muted">{error?.message ?? "Something went wrong."}</Text>
+          <Text variant="body" className="text-center text-ink-muted">
+            {error?.status === 402
+              ? "You've used your free trip. Go Pro for unlimited itineraries."
+              : error?.message ?? "Something went wrong."}
+          </Text>
         </View>
         <View className="gap-3 pt-3 border-t border-border bg-bg -mx-6 px-6" style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-          <Button title="Try again" size="lg" onPress={() => lastRequest && generate(lastRequest)} />
+          {error?.status === 402 ? (
+            <Button title="Go Pro" size="lg" variant="gradient" onPress={() => router.replace("/paywall")} />
+          ) : (
+            <Button title="Try again" size="lg" onPress={() => lastRequest && generate(lastRequest)} />
+          )}
           <Button title="Edit trip" variant="ghost" onPress={() => router.replace("/onboarding")} />
         </View>
       </Screen>
