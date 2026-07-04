@@ -62,9 +62,9 @@ export default function Gallery() {
   return (
     <Screen>
       <View className="flex-row items-center justify-between mb-3">
-        <View className="flex-row items-center gap-2">
+        <View className="flex-row items-center gap-2 flex-1 mr-2">
           <Button title="Back" variant="ghost" size="sm" onPress={() => router.back()} />
-          <Text variant="title">{title}</Text>
+          <Text variant="heading" numberOfLines={1} className="shrink">{title}</Text>
         </View>
         <Button title={editing ? "Done" : "Edit"} variant="ghost" size="sm" onPress={() => setEditing((e) => !e)} />
       </View>
