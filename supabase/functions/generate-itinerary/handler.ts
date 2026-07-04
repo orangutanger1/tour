@@ -8,6 +8,7 @@ import { sunsetLocalMinutes } from "../../_shared/solar.ts";
 import { buildDaySchedule } from "../../_shared/schedule.ts";
 
 export const DAILY_CAP = 10;
+export const FREE_TRIP_LIMIT = 1;
 
 // Per-day driving appetite by transport choice: minutes the traveler will spend
 // moving between stops, and an average speed to turn that into a distance the
@@ -41,6 +42,8 @@ export interface PipelineDeps {
 
 export interface StartDeps extends PipelineDeps {
   countTripsToday(userId: string): Promise<number>;   // implementation must exclude failed rows
+  countTotalTrips(userId: string): Promise<number>;   // all-time, excludes failed rows
+  hasProEntitlement(userId: string): Promise<boolean>; // may throw — caller fails open
   createPendingTrip(opts: { userId: string; req: GenerateRequest }): Promise<string>;
   completeTrip(opts: { tripId: string; itinerary: Itinerary }): Promise<void>;
   failTrip(opts: { tripId: string; message: string }): Promise<void>;
@@ -250,6 +253,16 @@ export async function startGenerate(
   }
   if ((await deps.countTripsToday(userId)) >= DAILY_CAP) {
     return { status: 429, body: { error: "daily generation limit reached" } };
+  }
+
+  if ((await deps.countTotalTrips(userId)) >= FREE_TRIP_LIMIT) {
+    let pro = true; // fail open: an entitlement-provider outage must never block generation
+    try {
+      pro = await deps.hasProEntitlement(userId);
+    } catch (e) {
+      console.error("entitlement check failed (allowing):", e instanceof Error ? e.message : e);
+    }
+    if (!pro) return { status: 402, body: { error: "pro required" } };
   }
 
   const tripId = await deps.createPendingTrip({ userId, req: body });

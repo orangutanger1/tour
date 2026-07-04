@@ -1,6 +1,6 @@
 // supabase/functions/generate-itinerary/handler_test.ts
 import { assertEquals, assert } from "jsr:@std/assert";
-import { startGenerate, DAILY_CAP, type StartDeps } from "./handler.ts";
+import { startGenerate, DAILY_CAP, FREE_TRIP_LIMIT, type StartDeps } from "./handler.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import type { Poi, Prefs, Itinerary } from "../../_shared/types.ts";
 import type { GenerateRequest } from "./handler.ts";
@@ -13,6 +13,8 @@ const itinerary: Itinerary = { days: [{ day: 1, lodgingPlaceId: null, stops: [{ 
 function baseDeps(over: Partial<StartDeps> = {}): StartDeps {
   return {
     countTripsToday: () => Promise.resolve(0),
+    countTotalTrips: () => Promise.resolve(0),
+    hasProEntitlement: () => Promise.resolve(false),
     resolveDestination: () => Promise.resolve({ center: { lat: 0, lng: 0 }, viewport: null }),
     fetchPois: ({ kind }) => Promise.resolve(kind === "lodging" ? lodging : attractions),
     curate: () => Promise.resolve(itinerary),
@@ -513,4 +515,45 @@ Deno.test("rich pool keeps multi-leg split for long trips", async () => {
   assertEquals(curateCalls.length, 2);       // still [6,6]
   assertEquals(curateCalls[0] + curateCalls[1], 12);
   assertEquals(r.completed!.days.length, 12);
+});
+
+Deno.test("free limit reached without pro → 402 and no pending row", async () => {
+  let created = false;
+  const deps = baseDeps({
+    countTotalTrips: () => Promise.resolve(FREE_TRIP_LIMIT),
+    createPendingTrip: () => { created = true; return Promise.resolve("t"); },
+  });
+  const r = await startGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
+  assertEquals(r.status, 402);
+  assertEquals((r.body as { error: string }).error, "pro required");
+  assertEquals(created, false);
+});
+
+Deno.test("free limit reached with pro entitlement → 202", async () => {
+  const deps = baseDeps({
+    countTotalTrips: () => Promise.resolve(5),
+    hasProEntitlement: () => Promise.resolve(true),
+  });
+  const r = await startGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
+  assertEquals(r.status, 202);
+});
+
+Deno.test("entitlement check failure fails open → 202", async () => {
+  const deps = baseDeps({
+    countTotalTrips: () => Promise.resolve(5),
+    hasProEntitlement: () => Promise.reject(new Error("rc down")),
+  });
+  const r = await startGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
+  assertEquals(r.status, 202);
+});
+
+Deno.test("first trip needs no entitlement → 202", async () => {
+  let checked = false;
+  const deps = baseDeps({
+    countTotalTrips: () => Promise.resolve(0),
+    hasProEntitlement: () => { checked = true; return Promise.resolve(false); },
+  });
+  const r = await startGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
+  assertEquals(r.status, 202);
+  assertEquals(checked, false);
 });
