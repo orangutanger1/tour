@@ -1,9 +1,9 @@
 # Privacy Policy
 
-**Effective date:** [DATE]
+**Effective date:** 2026-07-03
 **App:** Beacon ("the App")
-**Provider:** [Your Legal Name / Company LLC] ("we," "us," "our")
-**Contact:** [support@yourdomain.com]
+**Provider:** Nakodan Capital LLC ("we," "us," "our")
+**Contact:** beacontour1@outlook.com
 
 This Privacy Policy explains what information Beacon collects, how we use it, and the choices you have. By using the App, you agree to this Policy.
 
@@ -60,7 +60,7 @@ We keep your account information, trips, preferences, and photos for as long as 
 
 ## 6. Your choices and rights
 
-- **Access and deletion.** You can delete photos and trips in the App. To delete your account and all associated data, contact us at [support@yourdomain.com] or use the in-app account deletion option.
+- **Access and deletion.** You can delete photos and trips in the App. To delete your account and all associated data, contact us at beacontour1@outlook.com or use the in-app account deletion option.
 - **Region-specific rights.** Depending on where you live (e.g., EEA/UK under GDPR, California under CCPA/CPRA), you may have rights to access, correct, delete, or port your data, and to object to or restrict certain processing. To exercise these, contact us at the email above. We do not "sell" or "share" personal information for cross-context behavioral advertising.
 
 ## 7. Children's privacy
@@ -82,6 +82,5 @@ We may update this Policy. We will post the new version with an updated effectiv
 ## 11. Contact us
 
 Questions or requests:
-[Your Legal Name / Company LLC]
-[support@yourdomain.com]
-[Optional mailing address]
+Nakodan Capital LLC
+beacontour1@outlook.com

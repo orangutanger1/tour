@@ -1,9 +1,9 @@
 # Terms of Service
 
-**Effective date:** [DATE]
+**Effective date:** 2026-07-03
 **App:** Beacon ("the App")
-**Provider:** [Your Legal Name / Company LLC] ("we," "us," "our")
-**Contact:** [support@yourdomain.com]
+**Provider:** Nakodan Capital LLC ("we," "us," "our")
+**Contact:** beacontour1@outlook.com
 
 These Terms of Service ("Terms") govern your use of Beacon. By downloading, accessing, or using the App, you agree to these Terms. If you do not agree, do not use the App.
 
@@ -67,7 +67,7 @@ We may modify or discontinue the App, or update these Terms, at any time. Materi
 
 ## 14. Governing law
 
-These Terms are governed by the laws of [State/Country], without regard to conflict-of-law rules. Disputes will be resolved in the courts located in [Jurisdiction], unless applicable law requires otherwise.
+These Terms are governed by the laws of the State of California, USA, without regard to conflict-of-law rules. Disputes will be resolved in the courts located in California, unless applicable law requires otherwise.
 
 ## 15. Apple App Store terms
 
@@ -75,6 +75,5 @@ If you obtained the App through the Apple App Store, these additional terms appl
 
 ## 16. Contact
 
-[Your Legal Name / Company LLC]
-[support@yourdomain.com]
-[Optional mailing address]
+Nakodan Capital LLC
+beacontour1@outlook.com
