@@ -32,6 +32,7 @@ import {
 } from "../../components/ui";
 import { OptionList, type Option } from "../../components/onboarding/OptionList";
 import { ChipMultiSelect, type ChipOption } from "../../components/onboarding/ChipMultiSelect";
+import { RelateStatement } from "../../components/onboarding/RelateStatement";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -83,6 +84,8 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   hardestParts: { title: "What's the hardest part of planning a trip?", sub: "Pick as many as apply." },
   goals: { title: "What do you want out of Beacon?", sub: "Pick as many as apply." },
   goodPlace: { title: "You're in a good place." },
+  relateA1: { title: "Sound familiar?", sub: "My last itinerary had me crossing back through the same neighborhood twice in one day." },
+  relateA2: { title: "Sound familiar?", sub: "I spend more time figuring out what order to visit places than actually picking them." },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -401,6 +404,9 @@ export default function Onboarding() {
         {page === "goals" ? (
           <ChipMultiSelect options={GOALS_OPTIONS} selected={funnel.goals} onToggle={(v) => toggleFunnelMulti("goals", v)} />
         ) : null}
+
+        {page === "relateA1" ? <RelateStatement /> : null}
+        {page === "relateA2" ? <RelateStatement /> : null}
 
         {page === "travelParty" ? (
           <View className="gap-3">
