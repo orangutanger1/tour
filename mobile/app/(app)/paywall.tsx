@@ -97,7 +97,7 @@ export default function Paywall() {
         style={{ borderRadius: 24, padding: 24 }}
       >
         <Icon name="sparkles" size={28} color="#FFFFFF" />
-        <Text variant="title" className="text-ink-inverse mt-2">Tour Pro</Text>
+        <Text variant="title" className="text-ink-inverse mt-2">Beacon Pro</Text>
         <Text variant="body" className="text-ink-inverse opacity-90">
           Your first trip was on us. Go Pro for every trip after.
         </Text>

@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../lib/auth";
 import { supabase } from "../../lib/supabase";
 import { resolvePostAuthRoute } from "../../lib/postAuth";
+import { REVIEW_EMAIL } from "../../lib/review";
 import { Screen, Text, Button, Input, Icon } from "../../components/ui";
 
 export default function Email() {
@@ -24,6 +25,15 @@ export default function Email() {
   async function send() {
     setBusy(true);
     try {
+      // App Store review account: no real inbox, so fetch a one-time code from
+      // the review-login function and sign in without the code-entry step.
+      if (email.trim().toLowerCase() === REVIEW_EMAIL) {
+        const { data, error } = await supabase.functions.invoke<{ otp: string }>("review-login");
+        if (error || !data?.otp) throw error ?? new Error("review sign-in unavailable");
+        await verifyEmailOtp(REVIEW_EMAIL, data.otp);
+        router.replace(await resolvePostAuthRoute(supabase));
+        return;
+      }
       await signInWithEmailOtp(email.trim());
       setPhase("code");
       setCode("");

@@ -2,7 +2,7 @@
 // RevenueCat wrapper. iOS-only at launch; every entry point no-ops when not
 // configured (web, jest, missing key) so callers never need platform checks.
 import { useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import Constants from "expo-constants";
 import Purchases, { type CustomerInfo, type PurchasesPackage } from "react-native-purchases";
 
@@ -70,4 +70,11 @@ export async function restorePro(): Promise<boolean> {
   if (!configured) return false;
   const info = await Purchases.restorePurchases();
   return hasPro(info);
+}
+
+// Opens Apple's subscription management page — the one place to switch,
+// upgrade, downgrade, or cancel (StoreKit owns that UI). Required by
+// Guideline 3.1.2 for apps that sell auto-renewing subscriptions.
+export async function manageSubscriptions(): Promise<void> {
+  await Linking.openURL("https://apps.apple.com/account/subscriptions");
 }

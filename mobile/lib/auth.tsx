@@ -19,6 +19,7 @@ interface AuthValue {
   signInWithEmailOtp(email: string): Promise<void>;
   verifyEmailOtp(email: string, token: string): Promise<void>;
   signOut(): Promise<void>;
+  deleteAccount(): Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -78,9 +79,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  // Deletes the auth user (cascades all trips/photos/profile rows) plus their
+  // Storage photos, then clears the local session. Guideline 5.1.1(v).
+  async function deleteAccount() {
+    const { error } = await supabase.functions.invoke("delete-account");
+    if (error) throw error;
+    await supabase.auth.signOut();
+  }
+
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, signInWithGoogle, signInWithApple, signInWithEmailOtp, verifyEmailOtp, signOut }}
+      value={{ session, user: session?.user ?? null, loading, signInWithGoogle, signInWithApple, signInWithEmailOtp, verifyEmailOtp, signOut, deleteAccount }}
     >
       {children}
     </AuthContext.Provider>

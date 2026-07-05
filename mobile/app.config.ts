@@ -15,7 +15,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
   ...config,
-  name: "Tour",
+  name: "Beacon",
   slug: "tour",
   scheme: "tour",
   ios: {
