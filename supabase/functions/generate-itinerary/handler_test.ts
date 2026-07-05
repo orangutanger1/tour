@@ -1,6 +1,6 @@
 // supabase/functions/generate-itinerary/handler_test.ts
 import { assertEquals, assert } from "jsr:@std/assert";
-import { startGenerate, DAILY_CAP, FREE_TRIP_LIMIT, type StartDeps } from "./handler.ts";
+import { startGenerate, buildItinerary, DAILY_CAP, FREE_TRIP_LIMIT, type StartDeps } from "./handler.ts";
 import { CurationError } from "../../_shared/curate.ts";
 import type { Poi, Prefs, Itinerary } from "../../_shared/types.ts";
 import type { GenerateRequest } from "./handler.ts";
@@ -562,4 +562,70 @@ Deno.test("first trip needs no entitlement → 202", async () => {
   const r = await startGenerate({ location: "X", tripDays: 1, prefs }, "u1", deps);
   assertEquals(r.status, 202);
   assertEquals(checked, false);
+});
+
+Deno.test("multi-city: fetches a pool per picked city center and concatenates days", async () => {
+  const centersSeen: { lat: number; lng: number }[] = [];
+  const deps = baseDeps({
+    // Geocode: city A at (1,1), city B at (2,2).
+    resolveDestination: ({ placeId }: any) =>
+      Promise.resolve(
+        placeId === "A" ? { center: { lat: 1, lng: 1 }, viewport: { low: { lat: 0.9, lng: 0.9 }, high: { lat: 1.1, lng: 1.1 } } }
+        : placeId === "B" ? { center: { lat: 2, lng: 2 }, viewport: { low: { lat: 1.9, lng: 1.9 }, high: { lat: 2.1, lng: 2.1 } } }
+        : { center: { lat: 0, lng: 0 }, viewport: null },
+      ),
+    fetchPois: (o: any) => {
+      if (o.kind === "attraction" && o.locationBias) centersSeen.push(o.locationBias.center);
+      if (o.kind === "lodging") return Promise.resolve([]);
+      // 4 attractions clustered at whichever city center we were biased to.
+      const c = o.locationBias?.center ?? { lat: 0, lng: 0 };
+      return Promise.resolve(Array.from({ length: 4 }, (_, i) => ({
+        placeId: `${c.lat}-${i}`, name: `P${i}`, kind: "attraction", lat: c.lat, lng: c.lng,
+      })));
+    },
+  });
+  const itin = await buildItinerary(
+    { location: "Japan", tripDays: 4, prefs,
+      destinationPlaceId: "JP",
+      subDestinations: [{ placeId: "A", label: "Tokyo" }, { placeId: "B", label: "Kyoto" }] },
+    deps,
+  );
+  // Both city centers were used to bias attraction fetches.
+  const lats = centersSeen.map((c) => c.lat).sort();
+  assertEquals(lats, [1, 2]);
+  // 4 days requested, 2 cities → 2 days each, concatenated & renumbered 1..4.
+  assertEquals(itin.days.map((d) => d.day), [1, 2, 3, 4]);
+});
+
+Deno.test("multi-city: empty subDestinations uses the single-center path", async () => {
+  let biasedCenters = 0;
+  const deps = baseDeps({
+    resolveDestination: () => Promise.resolve({ center: { lat: 5, lng: 5 }, viewport: null }),
+    fetchPois: (o: any) => { if (o.locationBias) biasedCenters++; return Promise.resolve(
+      o.kind === "lodging" ? [] : [{ placeId: "X", name: "X", kind: o.kind, lat: 5, lng: 5 }]); },
+  });
+  const itin = await buildItinerary(
+    { location: "Paris", tripDays: 1, prefs, destinationPlaceId: "P", subDestinations: [] }, deps);
+  assertEquals(itin.days.length, 1); // unchanged single-dest behavior
+});
+
+Deno.test("multi-city: a city returning no POIs is dropped, trip still builds shorter", async () => {
+  const deps = baseDeps({
+    resolveDestination: ({ placeId }: any) => Promise.resolve(
+      placeId === "A" ? { center: { lat: 1, lng: 1 }, viewport: null }
+      : { center: { lat: 2, lng: 2 }, viewport: null }),
+    fetchPois: (o: any) => {
+      if (o.kind === "lodging") return Promise.resolve([]);
+      const c = o.locationBias?.center;
+      // City A (lat 1) has POIs; city B (lat 2) is barren.
+      if (c?.lat === 2) return Promise.resolve([]);
+      return Promise.resolve(Array.from({ length: 4 }, (_, i) => ({
+        placeId: `A-${i}`, name: `A${i}`, kind: "attraction", lat: 1, lng: 1 })));
+    },
+  });
+  const itin = await buildItinerary(
+    { location: "Japan", tripDays: 4, prefs, destinationPlaceId: "JP",
+      subDestinations: [{ placeId: "A", label: "Tokyo" }, { placeId: "B", label: "Nowhere" }] }, deps);
+  // Only city A survives → fewer than 4 days, but no crash.
+  assertEquals(itin.days.length >= 1 && itin.days.length < 4, true);
 });

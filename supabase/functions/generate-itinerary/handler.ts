@@ -3,7 +3,7 @@ import type { Itinerary, Poi, Prefs, Stop, TripType } from "../../_shared/types.
 import { CurationError } from "../../_shared/curate.ts";
 import { areaRadiusKm, haversineKm, type Viewport } from "../../_shared/area.ts";
 import { assignDays } from "../../_shared/cluster.ts";
-import { planLegs, legCenters, partitionByNearest, splitRoundRobin, effectiveTripDays } from "../../_shared/legs.ts";
+import { planLegs, legCenters, partitionByNearest, splitRoundRobin, effectiveTripDays, allocateDays } from "../../_shared/legs.ts";
 import { sunsetLocalMinutes } from "../../_shared/solar.ts";
 import { buildDaySchedule } from "../../_shared/schedule.ts";
 
@@ -24,6 +24,7 @@ export interface GenerateRequest {
   tripDays: number;
   prefs: Prefs;
   destinationPlaceId?: string;
+  subDestinations?: { placeId: string; label: string }[];
   startLocation?: string;
   startPlaceId?: string;
   startDate?: string;   // ISO YYYY-MM-DD
@@ -57,31 +58,14 @@ export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps):
   const travelMode = body.prefs.transport === "compact" ? "WALK" as const : "DRIVE" as const;
 
   const tripType: TripType = body.tripType ?? "round";
-  const legSizes = planLegs(body.tripDays);
-  const multiLeg = legSizes.length > 1;
-  const centers = legCenters({ center: dest.center, viewport: dest.viewport, legs: legSizes.length, tripType });
-  // ponytail: leg bias radius = region radius / legs, floor 10km — tune against real long trips.
-  const legRadiusKm = Math.max(radiusKm / legSizes.length, 10);
 
   const wantsFood = body.prefs.interests.includes("food");
-  // Food and lodging are enrichments, not the trip itself — a flaky Places call
-  // for either should degrade (empty list) rather than crash the whole request
-  // into the runtime's 546. Only attractions are essential; if they fail the
-  // request throws and the index wrapper turns it into a readable 500.
-  // ponytail: food/lodging stay whole-region even for multi-leg trips; meals
-  // degrade to free-range gaps when the ~20-restaurant pool runs out. Upgrade:
-  // per-leg food fetch if long-trip meals matter.
-  const [attractionPools, food, lodging] = await Promise.all([
-    Promise.all(centers.map((c) =>
-      deps.fetchPois({
-        location: body.location, kind: "attraction", prefs: body.prefs,
-        locationBias: hasCenter ? { center: c, radiusKm: multiLeg ? legRadiusKm : radiusKm } : undefined,
-      }))),
-    wantsFood
-      ? deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias }).catch(() => [] as Poi[])
-      : Promise.resolve([] as Poi[]),
-    deps.fetchPois({ location: body.location, kind: "lodging", prefs: body.prefs, locationBias }).catch(() => [] as Poi[]),
-  ]);
+  // Food and lodging are region-wide enrichments (parent bias), fetched in
+  // parallel with the attraction work below. A flaky call degrades to [].
+  const foodP = wantsFood
+    ? deps.fetchPois({ location: body.location, kind: "food", prefs: body.prefs, locationBias }).catch(() => [] as Poi[])
+    : Promise.resolve([] as Poi[]);
+  const lodgingP = deps.fetchPois({ location: body.location, kind: "lodging", prefs: body.prefs, locationBias }).catch(() => [] as Poi[]);
 
   // Start location is optional; a bad placeId shouldn't sink the trip.
   const start = (body.startPlaceId || body.startLocation)
@@ -89,36 +73,86 @@ export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps):
     : null;
   const startCenter = start && (start.center.lat !== 0 || start.center.lng !== 0) ? start.center : null;
 
-  // Dedupe the fetched attractions globally, then split into disjoint per-leg
-  // pools so parallel curations can never pick the same place twice. Food is
-  // never curated by the LLM (meals are deterministic add-ons below).
-  const seenIds = new Set<string>();
-  const pois: Poi[] = [];
-  for (const pool of attractionPools) {
-    for (const p of pool) {
-      if (!seenIds.has(p.placeId)) { seenIds.add(p.placeId); pois.push(p); }
+  // --- Attraction pools + leg plan ---
+  let pois: Poi[];
+  let finalLegSizes: number[];
+  let legPools: Poi[][];
+  let finalMultiLeg: boolean;
+
+  const picks = body.subDestinations ?? [];
+  if (picks.length > 0) {
+    // Multi-city: the user chose the cities. Each is one leg — geocode its
+    // center, fetch a dense city-scale pool, split the days across the cities.
+    const geos = await Promise.all(picks.map((p) =>
+      deps.resolveDestination({ placeId: p.placeId, location: p.label }).catch(() => null)));
+    const cities = picks
+      .map((p, i) => ({ p, geo: geos[i] }))
+      .filter((c): c is { p: { placeId: string; label: string }; geo: { center: { lat: number; lng: number }; viewport: Viewport } } =>
+        !!c.geo && (c.geo.center.lat !== 0 || c.geo.center.lng !== 0));
+    const allotted = allocateDays(body.tripDays, cities.length || 1);
+    const rawPools = await Promise.all(cities.map((c) =>
+      deps.fetchPois({
+        location: c.p.label, kind: "attraction", prefs: body.prefs,
+        locationBias: { center: c.geo.center, radiusKm: areaRadiusKm({ viewport: c.geo.viewport, transport: body.prefs.transport }) },
+      }).catch(() => [] as Poi[])));
+    // Dedupe globally, keeping each city's pool disjoint (first city keeps a shared place).
+    const seen = new Set<string>();
+    const disjoint = rawPools.map((pool) => {
+      const out: Poi[] = [];
+      for (const p of pool) if (!seen.has(p.placeId)) { seen.add(p.placeId); out.push(p); }
+      return out;
+    });
+    // Drop cities that returned nothing; cap each survivor's days to its pool.
+    const kept = disjoint
+      .map((pool, i) => ({ pool, days: effectiveTripDays(pool.length, allotted[i]) }))
+      .filter((k) => k.pool.length > 0);
+    legPools = kept.map((k) => k.pool);
+    finalLegSizes = kept.map((k) => k.days);
+    finalMultiLeg = legPools.length > 1;
+    pois = legPools.flat();
+    // Every picked city came back empty (all Places calls failed) → fall back to
+    // the parent single-center pool so the trip still builds rather than 500-ing.
+    if (legPools.length === 0) {
+      const pool = await deps.fetchPois({ location: body.location, kind: "attraction", prefs: body.prefs, locationBias });
+      pois = pool;
+      finalLegSizes = [effectiveTripDays(pool.length, body.tripDays)];
+      legPools = [pool];
+      finalMultiLeg = false;
+    }
+  } else {
+    // Single-destination path (unchanged): fetch around the destination centroid,
+    // then re-plan geometric legs from the pool we actually got.
+    const legSizes = planLegs(body.tripDays);
+    const centers = legCenters({ center: dest.center, viewport: dest.viewport, legs: legSizes.length, tripType });
+    const multiLeg = legSizes.length > 1;
+    // ponytail: leg bias radius = region radius / legs, floor 10km.
+    const legRadiusKm = Math.max(radiusKm / legSizes.length, 10);
+    const attractionPools = await Promise.all(centers.map((c) =>
+      deps.fetchPois({
+        location: body.location, kind: "attraction", prefs: body.prefs,
+        locationBias: hasCenter ? { center: c, radiusKm: multiLeg ? legRadiusKm : radiusKm } : undefined,
+      })));
+    const seenIds = new Set<string>();
+    pois = [];
+    for (const pool of attractionPools) {
+      for (const p of pool) if (!seenIds.has(p.placeId)) { seenIds.add(p.placeId); pois.push(p); }
+    }
+    const plannedDays = effectiveTripDays(pois.length, body.tripDays);
+    finalLegSizes = planLegs(plannedDays);
+    if (pois.length < 8 * finalLegSizes.length) finalLegSizes = [plannedDays];
+    const finalCenters = legCenters({ center: dest.center, viewport: dest.viewport, legs: finalLegSizes.length, tripType });
+    finalMultiLeg = finalLegSizes.length > 1;
+    legPools = finalMultiLeg
+      ? (hasCenter ? partitionByNearest(pois, finalCenters) : splitRoundRobin(pois, finalLegSizes.length))
+      : [pois];
+    if (finalMultiLeg && legPools.some((p, i) => p.length < finalLegSizes[i])) {
+      finalLegSizes = [plannedDays];
+      finalMultiLeg = false;
+      legPools = [pois];
     }
   }
-  // Re-plan from the pool we actually got: sparse destinations cap the days
-  // (~2 attractions minimum per day), and a leg is only worth its own curation
-  // with ~8 attractions to choose from.
-  const plannedDays = effectiveTripDays(pois.length, body.tripDays);
-  let finalLegSizes = planLegs(plannedDays);
-  if (pois.length < 8 * finalLegSizes.length) finalLegSizes = [plannedDays];
-  const finalCenters = legCenters({ center: dest.center, viewport: dest.viewport, legs: finalLegSizes.length, tripType });
-  let finalMultiLeg = finalLegSizes.length > 1;
-  let legPools = finalMultiLeg
-    ? (hasCenter ? partitionByNearest(pois, finalCenters) : splitRoundRobin(pois, finalLegSizes.length))
-    : [pois];
-  // A leg needs at least one place per day or its curation can never validate
-  // and the whole trip fails. Lopsided geography (all POIs bunched in one
-  // corner) can starve a leg even with a healthy total pool — collapse to a
-  // single whole-pool curation instead.
-  if (finalMultiLeg && legPools.some((p, i) => p.length < finalLegSizes[i])) {
-    finalLegSizes = [plannedDays];
-    finalMultiLeg = false;
-    legPools = [pois];
-  }
+
+  const [food, lodging] = await Promise.all([foodP, lodgingP]);
   const anchorPoi = lodging[0] ?? null;
 
   // Curate each leg in parallel — grounding + validation stay per-leg
