@@ -12,9 +12,9 @@ export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", 
 // in canContinue → default true, so Continue is always enabled on them.
 export const STEPS = [
   "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
-  "relateA1", "relateA2", "craft",
+  "relateA1", "relateA2", "craft", "relateB1", "relateB2", "trust",
   "destination", "dates", "classics", "interests", "travelParty",
-  "budget", "pace", "transport", "trust", "start", "midway", "review",
+  "budget", "pace", "transport", "start", "midway", "review",
 ] as const;
 export const STEP_COUNT = STEPS.length;
 

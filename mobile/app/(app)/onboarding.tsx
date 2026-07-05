@@ -86,6 +86,8 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   goodPlace: { title: "You're in a good place." },
   relateA1: { title: "Sound familiar?", sub: "My last itinerary had me crossing back through the same neighborhood twice in one day." },
   relateA2: { title: "Sound familiar?", sub: "I spend more time figuring out what order to visit places than actually picking them." },
+  relateB1: { title: "Sound familiar?", sub: "I've shown up somewhere only to find out it's closed." },
+  relateB2: { title: "Sound familiar?", sub: "Half my planning is just double-checking hours and travel times." },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -407,6 +409,8 @@ export default function Onboarding() {
 
         {page === "relateA1" ? <RelateStatement /> : null}
         {page === "relateA2" ? <RelateStatement /> : null}
+        {page === "relateB1" ? <RelateStatement /> : null}
+        {page === "relateB2" ? <RelateStatement /> : null}
 
         {page === "travelParty" ? (
           <View className="gap-3">
