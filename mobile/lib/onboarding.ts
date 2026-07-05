@@ -57,6 +57,12 @@ export function stateFromRequest(req: GenerateRequest): OnboardingState {
   };
 }
 
+// Seed the destination step from a route param (Discover's "Plan a trip").
+export function withDestination(s: OnboardingState, destination?: string): OnboardingState {
+  const loc = destination?.trim();
+  return loc ? { ...s, location: loc } : s;
+}
+
 // Days derive from the calendar range — no separate tripDays state, no clamp.
 export function tripDaysOf(s: OnboardingState): number {
   return s.startDate && s.endDate ? inclusiveDayCount(s.startDate, s.endDate) : 0;

@@ -1,6 +1,6 @@
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
-  prefsFromState, buildRequest, tripDaysOf, shouldOfferRegions, type OnboardingState,
+  prefsFromState, buildRequest, tripDaysOf, shouldOfferRegions, withDestination, type OnboardingState,
 } from "./onboarding";
 import type { Prefs } from "./types";
 
@@ -94,4 +94,15 @@ test("shouldOfferRegions for country / admin_area_1 only", () => {
   expect(shouldOfferRegions(["country"])).toBe(true);
   expect(shouldOfferRegions(["administrative_area_level_1"])).toBe(true);
   expect(shouldOfferRegions(["locality"])).toBe(false);
+});
+
+test("withDestination seeds location", () => {
+  expect(withDestination(base, "Kyoto, Japan").location).toBe("Kyoto, Japan");
+  expect(withDestination(base, "  Kyoto, Japan  ").location).toBe("Kyoto, Japan");
+});
+
+test("withDestination is a no-op without a destination", () => {
+  expect(withDestination(base, undefined)).toBe(base);
+  expect(withDestination(base, "")).toBe(base);
+  expect(withDestination(base, "   ")).toBe(base);
 });

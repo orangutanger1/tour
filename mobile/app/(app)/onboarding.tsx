@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { View, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import Constants from "expo-constants";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import Animated, { FadeInRight } from "react-native-reanimated";
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
-  buildRequest, tripDaysOf, shouldOfferRegions, type OnboardingState,
+  buildRequest, tripDaysOf, shouldOfferRegions, withDestination, type OnboardingState,
 } from "../../lib/onboarding";
 import { formatShort } from "../../lib/dates";
 import { getProfile } from "../../lib/profile";
@@ -68,8 +68,9 @@ export default function Onboarding() {
   // generate does router.replace, which remounts this screen). lastRequest lives in
   // TripFlowProvider (above the Stack), so it survives the remount.
   const seedRequest = tripFlow.lastRequest;
+  const { destination } = useLocalSearchParams<{ destination?: string }>();
   const [state, setState] = useState<OnboardingState>(
-    seedRequest ? stateFromRequest(seedRequest) : stateFromProfile(null),
+    seedRequest ? stateFromRequest(seedRequest) : withDestination(stateFromProfile(null), destination),
   );
   const [suggestions, setSuggestions] = useState<{ text: string; placeId: string; types: string[] }[]>([]);
   const debouncedLocation = useDebouncedValue(state.location, 300);
@@ -79,7 +80,7 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (seedRequest) return; // editing an existing trip — don't clobber it with profile defaults
-    getProfile(supabase).then((prefs) => setState(stateFromProfile(prefs))).catch(() => {});
+    getProfile(supabase).then((prefs) => setState(withDestination(stateFromProfile(prefs), destination))).catch(() => {});
   }, []);
 
   useEffect(() => {
