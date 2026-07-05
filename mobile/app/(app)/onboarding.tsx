@@ -22,6 +22,7 @@ import {
 import { formatShort } from "../../lib/dates";
 import { getProfile, saveFunnelAnswers } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
+import { track } from "../../lib/analytics";
 import { useTripFlow } from "../../lib/tripFlow";
 import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
 import { usePro } from "../../lib/purchases";
@@ -286,6 +287,7 @@ export default function Onboarding() {
   }
 
   function onGenerate() {
+    track(supabase, "onboarding_completed", { destination: state.location, days: tripDaysOf(state) });
     tripFlow.generate(buildRequest(state));
     router.push("/generating");
   }
@@ -602,6 +604,7 @@ export default function Onboarding() {
             disabled={!canContinue(step, state)}
             onPress={() => {
               if (page === "attribution") saveFunnelAnswers(supabase, funnelPrefs(funnel)).catch(() => {});
+              track(supabase, "onboarding_step_completed", { step: page, index: step });
               setStep((s) => resolveStep(s + 1, regions.length > 0, 1));
             }}
           />
