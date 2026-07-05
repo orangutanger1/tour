@@ -6,6 +6,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing } from "react-native-reanimated";
 import { useTripFlow } from "../../lib/tripFlow";
+import { supabase } from "../../lib/supabase";
+import { track } from "../../lib/analytics";
 import { Screen, Text, Button, Icon, SUNSET } from "../../components/ui";
 
 const PHASES = ["Scouting local favorites…", "Mapping smart routes…", "Timing each day…"];
@@ -16,7 +18,10 @@ export default function Generating() {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (status === "success") router.replace("/itinerary");
+    if (status === "success") {
+      track(supabase, "itinerary_generated");
+      router.replace("/itinerary");
+    }
   }, [status]);
 
   const [phase, setPhase] = useState(0);

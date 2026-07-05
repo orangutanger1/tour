@@ -6,6 +6,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
 import type { PurchasesPackage } from "react-native-purchases";
 import { getProPackages, purchasePro, restorePro } from "../../lib/purchases";
+import { supabase } from "../../lib/supabase";
+import { track } from "../../lib/analytics";
 import { Screen, Text, Button, Icon, PressableScale, Loading, SUNSET, PlanCard } from "../../components/ui";
 
 // ponytail: repo docs as legal pages; swap for hosted URLs before App Store submission (see plan Task 9)
@@ -28,6 +30,7 @@ export default function Paywall() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    track(supabase, "paywall_viewed");
     getProPackages()
       .then((pkgs) => {
         setPackages(pkgs);
