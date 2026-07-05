@@ -31,16 +31,27 @@ step keys, `lib/onboarding.ts`) + `useState<number>` step index; the visible ste
 `STEPS[step]`, rendered inside one `Animated.View`, advanced by the pinned footer's
 Continue button gated by `canContinue(step, state)`.
 
-Going from 14 steps to ~26 makes the current single-file render block (already 480
-lines) unmanageable. Refactor as part of this work:
-- `onboarding.tsx` becomes the orchestrator only: step machine, header/back, progress
-  bar, footer. No per-step JSX inline.
-- Each step's render logic moves to `mobile/components/onboarding/steps/<StepName>.tsx`,
-  taking `state`/`setState` (and any step-specific callbacks) as props.
-- `STEPS`, `canContinue`, `OnboardingState`, `buildRequest`, `prefsFromState` all stay in
-  `lib/onboarding.ts` as today — this refactor only moves rendering, not the step-machine
-  contract, so the existing `STEPS.indexOf`-keyed tests keep working unmodified apart from
-  new entries.
+Going from 14 steps to ~26 sounds like it forces a full split of every step into its own
+file, but most new steps reuse the existing generic scaffolding — the `PROMPTS`
+title/sub lookup and the `INFO` ethos-hero lookup already used by `intro`/`craft`/`trust`/
+`midway` — rather than needing bespoke JSX. Net growth of `onboarding.tsx` is closer to
+480→~560 lines, not an unmanageable blowup. So this work does **not** refactor the 10
+existing bespoke step blocks (destination/dates/interests/classics/travelParty/budget/
+pace/transport/start/review) — they stay inline as today, unmodified, to minimize risk to
+stable working code.
+
+What *does* get extracted, because it's either genuinely reusable or a large
+self-contained unit: `OptionList` (shared by `planningCheck`/`attribution`),
+`ChipMultiSelect` (shared by `hardestParts`/`goals`), `RelateStatement` (shared by the 4
+relate steps), `NotificationsStep`, `CompareStep`, and `TrialOfferStep` (the biggest —
+owns its own RevenueCat fetch/purchase state) — all new files under
+`mobile/components/onboarding/`.
+
+`STEPS`, `canContinue`, `OnboardingState`, `buildRequest`, `prefsFromState` all stay in
+`lib/onboarding.ts` as today, extended with a separate `FunnelState`/`funnelPrefs` (kept
+out of `OnboardingState` so it never touches `buildRequest`/`stateFromRequest`, which are
+strictly the trip-generation contract sent to the backend). The existing
+`STEPS.indexOf`-keyed tests keep working unmodified apart from new entries.
 
 No new route, no new screen family — `postAuthRoute` still sends new users to
 `/onboarding` unchanged.
@@ -73,9 +84,18 @@ existing ethos-step convention, to keep the funnel low-friction.
 ## 3. Data, persistence, component reuse
 
 - `planningCheck` / `hardestParts` / `goals` / `attribution` answers merge into
-  `profiles.default_prefs` jsonb (new keys: `planning_check`, `hardest_parts`, `goals`,
-  `attribution_source`) via the existing `upsertProfile`/`prefsFromState` pattern — no
-  migration needed, jsonb already supports arbitrary keys.
+  `profiles.default_prefs` jsonb (new camelCase keys: `planningCheck`, `hardestParts`,
+  `goals`, `attributionSource` — matching the existing `galleryStyle` key convention in
+  that column) via a new `saveFunnelAnswers` helper that mirrors the existing
+  `getGalleryStyle`/`setGalleryStyle` pattern (loose read-merge-upsert on
+  `default_prefs`, bypassing the strict `Prefs` type). **Not** the `upsertProfile`/
+  `prefsFromState` path — that path's `Prefs` type is a mirror of the backend's shared
+  contract and feeds `GenerateRequest`; funnel/segmentation answers must not leak into
+  the trip-generation request. No migration needed — jsonb already supports arbitrary
+  keys.
+- These answers live in a separate `FunnelState` (not `OnboardingState`), set via its own
+  local state in the orchestrator — kept out of `OnboardingState` so `buildRequest`/
+  `stateFromRequest`'s round-trip contract (tested in `onboarding.test.ts`) is untouched.
 - Relate-statement (`relateA1/A2/B1/B2`) answers are **not persisted** — pure engagement
   priming, same precedent as the existing `travelParty` step.
 - New components: generic `RelateStatement` (Yes/No, reused 4x), `notifications`
