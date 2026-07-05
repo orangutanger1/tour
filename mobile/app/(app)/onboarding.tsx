@@ -34,6 +34,7 @@ import { OptionList, type Option } from "../../components/onboarding/OptionList"
 import { ChipMultiSelect, type ChipOption } from "../../components/onboarding/ChipMultiSelect";
 import { RelateStatement } from "../../components/onboarding/RelateStatement";
 import { NotificationsStep } from "../../components/onboarding/NotificationsStep";
+import { CompareStep } from "../../components/onboarding/CompareStep";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -98,6 +99,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   relateB2: { title: "Sound familiar?", sub: "Half my planning is just double-checking hours and travel times." },
   notifications: { title: "Never miss a change" },
   attribution: { title: "How'd you hear about us?" },
+  compare: { title: "You're in the right place", sub: "Here's the difference." },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -432,6 +434,8 @@ export default function Onboarding() {
             onSelect={(v) => setFunnel((f) => ({ ...f, attributionSource: v as FunnelState["attributionSource"] }))}
           />
         ) : null}
+
+        {page === "compare" ? <CompareStep /> : null}
 
         {page === "travelParty" ? (
           <View className="gap-3">
