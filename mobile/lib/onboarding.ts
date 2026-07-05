@@ -14,7 +14,7 @@ export const STEPS = [
   "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
   "relateA1", "relateA2", "craft", "relateB1", "relateB2", "trust",
   "notifications", "attribution", "compare", "trialOffer",
-  "destination", "dates", "classics", "interests", "travelParty",
+  "destination", "subDestinations", "dates", "classics", "interests", "travelParty",
   "budget", "pace", "transport", "start", "midway", "review",
 ] as const;
 export const STEP_COUNT = STEPS.length;
@@ -57,6 +57,7 @@ export interface OnboardingState {
   transport: Prefs["transport"];
   location: string;
   destinationPlaceId?: string;
+  subDestinations: { placeId: string; label: string }[];
   startDate?: string;   // ISO YYYY-MM-DD
   endDate?: string;
   tripType: TripType;
@@ -72,6 +73,7 @@ export function stateFromProfile(prefs: Prefs | null): OnboardingState {
     transport: prefs?.transport ?? "balanced",
     location: "",
     destinationPlaceId: undefined,
+    subDestinations: [],
     startDate: undefined,
     endDate: undefined,
     tripType: "round",
@@ -90,6 +92,7 @@ export function stateFromRequest(req: GenerateRequest): OnboardingState {
     transport: req.prefs.transport,
     location: req.location,
     destinationPlaceId: req.destinationPlaceId,
+    subDestinations: req.subDestinations ?? [],
     startDate: req.startDate,
     endDate: req.endDate,
     tripType: req.tripType ?? "round",
@@ -112,10 +115,17 @@ export function tripDaysOf(s: OnboardingState): number {
 export function canContinue(step: number, s: OnboardingState): boolean {
   switch (STEPS[step]) {
     case "destination": return s.location.trim().length > 0;
+    case "subDestinations": return s.subDestinations.length >= 1;
     case "dates": return tripDaysOf(s) >= 1;
     case "interests": return s.interests.length >= 1;
     default: return true;
   }
+}
+
+// The subDestinations step is conditional on the picked place resolving regions.
+// When it doesn't, skip past it in whichever direction we're moving.
+export function resolveStep(target: number, hasRegions: boolean, dir: 1 | -1): number {
+  return STEPS[target] === "subDestinations" && !hasRegions ? target + dir : target;
 }
 
 export function prefsFromState(s: OnboardingState): Prefs {
@@ -128,6 +138,7 @@ export function buildRequest(s: OnboardingState): GenerateRequest {
     tripDays: tripDaysOf(s),
     prefs: prefsFromState(s),
     destinationPlaceId: s.destinationPlaceId,
+    subDestinations: s.subDestinations.length ? s.subDestinations : undefined,
     startDate: s.startDate,
     endDate: s.endDate,
     tripType: s.tripType,

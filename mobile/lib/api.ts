@@ -6,6 +6,7 @@ export interface GenerateRequest {
   tripDays: number;
   prefs: Prefs;
   destinationPlaceId?: string;
+  subDestinations?: { placeId: string; label: string }[];
   startLocation?: string;
   startPlaceId?: string;
   startDate?: string;   // ISO YYYY-MM-DD — calendar is source of truth

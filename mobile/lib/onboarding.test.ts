@@ -1,13 +1,13 @@
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
   prefsFromState, buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
-  funnelPrefs, EMPTY_FUNNEL, type OnboardingState, type FunnelState,
+  funnelPrefs, EMPTY_FUNNEL, resolveStep, type OnboardingState, type FunnelState,
 } from "./onboarding";
 import type { Prefs } from "./types";
 
 const base: OnboardingState = {
   interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced",
-  location: "Lisbon", startDate: "2026-07-12", endDate: "2026-07-18", tripType: "round",
+  location: "Lisbon", subDestinations: [], startDate: "2026-07-12", endDate: "2026-07-18", tripType: "round",
 };
 
 test("INTERESTS has the fixed taxonomy", () => {
@@ -19,10 +19,10 @@ test("STEPS is the destination-first flow with the growth funnel prepended", () 
     "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
     "relateA1", "relateA2", "craft", "relateB1", "relateB2", "trust",
     "notifications", "attribution", "compare", "trialOffer",
-    "destination", "dates", "classics", "interests", "travelParty",
+    "destination", "subDestinations", "dates", "classics", "interests", "travelParty",
     "budget", "pace", "transport", "start", "midway", "review",
   ]);
-  expect(STEP_COUNT).toBe(26);
+  expect(STEP_COUNT).toBe(27);
 });
 
 test("stateFromProfile seeds prefs, blank trip fields, round trip default", () => {
@@ -60,7 +60,7 @@ test("buildRequest emits dates, trip type, and derived tripDays", () => {
 test("stateFromRequest round-trips buildRequest (rehydrate in-progress trip)", () => {
   const s: OnboardingState = {
     interests: ["scenic", "food"], budget: "high", pace: "balanced", transport: "far",
-    location: "Canada", destinationPlaceId: "p-canada",
+    location: "Canada", destinationPlaceId: "p-canada", subDestinations: [],
     startDate: "2026-08-01", endDate: "2026-08-21", tripType: "oneway",
     startLocation: "YVR", startPlaceId: "p-yvr",
   };
@@ -143,4 +143,38 @@ test("EMPTY_FUNNEL starts with no selections", () => {
   expect(funnelPrefs(EMPTY_FUNNEL)).toEqual({
     planningCheck: undefined, hardestParts: [], goals: [], attributionSource: undefined,
   });
+});
+
+const baseState = () => ({ ...stateFromProfile(null), location: "Japan", destinationPlaceId: "JP", startDate: "2026-08-01", endDate: "2026-08-07" });
+
+test("subDestinations step sits immediately after destination", () => {
+  expect(STEPS[STEPS.indexOf("destination") + 1]).toBe("subDestinations");
+});
+
+test("canContinue(subDestinations) requires at least one pick", () => {
+  const step = STEPS.indexOf("subDestinations");
+  expect(canContinue(step, { ...baseState(), subDestinations: [] })).toBe(false);
+  expect(canContinue(step, { ...baseState(), subDestinations: [{ placeId: "A", label: "Tokyo" }] })).toBe(true);
+});
+
+test("buildRequest omits subDestinations when empty, includes when set", () => {
+  expect(buildRequest({ ...baseState(), subDestinations: [] }).subDestinations).toBeUndefined();
+  const picks = [{ placeId: "A", label: "Tokyo" }];
+  expect(buildRequest({ ...baseState(), subDestinations: picks }).subDestinations).toEqual(picks);
+});
+
+test("stateFromRequest round-trips subDestinations (default [])", () => {
+  const picks = [{ placeId: "A", label: "Tokyo" }];
+  const req = buildRequest({ ...baseState(), subDestinations: picks });
+  expect(stateFromRequest(req).subDestinations).toEqual(picks);
+  const bare = buildRequest({ ...baseState(), subDestinations: [] });
+  expect(stateFromRequest(bare).subDestinations).toEqual([]);
+});
+
+test("resolveStep skips subDestinations when no regions, keeps it when regions exist", () => {
+  const sd = STEPS.indexOf("subDestinations");
+  expect(resolveStep(sd, false, 1)).toBe(sd + 1); // forward skip past it
+  expect(resolveStep(sd, false, -1)).toBe(sd - 1); // backward skip past it
+  expect(resolveStep(sd, true, 1)).toBe(sd);       // land on it when regions exist
+  expect(resolveStep(STEPS.indexOf("dates"), false, 1)).toBe(STEPS.indexOf("dates")); // non-target untouched
 });
