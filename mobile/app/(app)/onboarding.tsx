@@ -33,6 +33,7 @@ import {
 import { OptionList, type Option } from "../../components/onboarding/OptionList";
 import { ChipMultiSelect, type ChipOption } from "../../components/onboarding/ChipMultiSelect";
 import { RelateStatement } from "../../components/onboarding/RelateStatement";
+import { NotificationsStep } from "../../components/onboarding/NotificationsStep";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -88,6 +89,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   relateA2: { title: "Sound familiar?", sub: "I spend more time figuring out what order to visit places than actually picking them." },
   relateB1: { title: "Sound familiar?", sub: "I've shown up somewhere only to find out it's closed." },
   relateB2: { title: "Sound familiar?", sub: "Half my planning is just double-checking hours and travel times." },
+  notifications: { title: "Never miss a change" },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -109,6 +111,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
 const INFO: Partial<Record<(typeof STEPS)[number], { icon: IconName; blurb: string; image?: number }>> = {
   intro: { icon: "map", blurb: "We sequence every day by real distances and daylight — not a random list of pins.", image: require("../../assets/images/landmarks/intro.png") },
   goodPlace: { icon: "sparkles", blurb: "Here's what makes Beacon different." },
+  notifications: { icon: "notifications", blurb: "We'll nudge you if your plan changes — nothing else." },
   craft: { icon: "navigate", blurb: "Stops are ordered to cut backtracking, with meals slotted where they naturally fit the day.", image: require("../../assets/images/landmarks/craft.png") },
   trust: { icon: "shield-checkmark", blurb: "Places, travel times, and opening hours come from live maps — so your plan holds up on the ground.", image: require("../../assets/images/landmarks/trust.png") },
   midway: { icon: "sparkles", blurb: "One last look, then we'll build your itinerary.", image: require("../../assets/images/landmarks/midway.png") },
@@ -411,6 +414,8 @@ export default function Onboarding() {
         {page === "relateA2" ? <RelateStatement /> : null}
         {page === "relateB1" ? <RelateStatement /> : null}
         {page === "relateB2" ? <RelateStatement /> : null}
+
+        {page === "notifications" ? <NotificationsStep /> : null}
 
         {page === "travelParty" ? (
           <View className="gap-3">

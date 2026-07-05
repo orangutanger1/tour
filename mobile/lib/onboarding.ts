@@ -13,6 +13,7 @@ export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", 
 export const STEPS = [
   "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
   "relateA1", "relateA2", "craft", "relateB1", "relateB2", "trust",
+  "notifications",
   "destination", "dates", "classics", "interests", "travelParty",
   "budget", "pace", "transport", "start", "midway", "review",
 ] as const;
