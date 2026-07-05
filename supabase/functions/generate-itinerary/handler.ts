@@ -105,7 +105,7 @@ export async function buildItinerary(body: GenerateRequest, deps: PipelineDeps):
     // Drop cities that returned nothing; cap each survivor's days to its pool.
     const kept = disjoint
       .map((pool, i) => ({ pool, days: effectiveTripDays(pool.length, allotted[i]) }))
-      .filter((k) => k.pool.length > 0);
+      .filter((k) => k.pool.length > 0 && k.days > 0);
     legPools = kept.map((k) => k.pool);
     finalLegSizes = kept.map((k) => k.days);
     finalMultiLeg = legPools.length > 1;

@@ -609,6 +609,47 @@ Deno.test("multi-city: empty subDestinations uses the single-center path", async
   assertEquals(itin.days.length, 1); // unchanged single-dest behavior
 });
 
+Deno.test("multi-city: a city allotted 0 days is dropped before curation, trip still builds", async () => {
+  // 3 picked cities on a 2-day trip: allocateDays(2, 3) = [1, 1, 0]. City C's
+  // pool is nonempty but gets 0 allotted days — it must be dropped by the
+  // `kept` filter in buildItinerary before reaching curate(), never handed a
+  // tripDays: 0 leg. A fake curate that mirrors the real one's behavior
+  // (CurationError on a 0-day ask) proves that: without the `k.days > 0`
+  // filter, this test throws.
+  const curateTripDays: number[] = [];
+  const deps = baseDeps({
+    resolveDestination: ({ placeId }: any) => Promise.resolve(
+      placeId === "A" ? { center: { lat: 1, lng: 1 }, viewport: null }
+      : placeId === "B" ? { center: { lat: 2, lng: 2 }, viewport: null }
+      : { center: { lat: 3, lng: 3 }, viewport: null }),
+    fetchPois: (o: any) => {
+      if (o.kind === "lodging") return Promise.resolve([]);
+      const c = o.locationBias?.center ?? { lat: 0, lng: 0 };
+      // All three cities return a nonempty pool.
+      return Promise.resolve(Array.from({ length: 4 }, (_, i) => ({
+        placeId: `${c.lat}-${i}`, name: `P${i}`, kind: "attraction", lat: c.lat, lng: c.lng,
+      })));
+    },
+    curate: (o: any) => {
+      curateTripDays.push(o.tripDays);
+      if (o.tripDays <= 0) throw new CurationError("curation failed — 0 expected days");
+      return Promise.resolve({
+        days: [{ day: 1, lodgingPlaceId: null, stops: o.pois.map((p: Poi) => ({ placeId: p.placeId, name: p.name, blurb: "x" })) }],
+      });
+    },
+  });
+  const itin = await buildItinerary(
+    { location: "Japan", tripDays: 2, prefs, destinationPlaceId: "JP",
+      subDestinations: [{ placeId: "A", label: "Tokyo" }, { placeId: "B", label: "Kyoto" }, { placeId: "C", label: "Osaka" }] },
+    deps,
+  );
+  // curate was only ever asked for the two cities with days > 0 — the
+  // 0-day city (C) never reached curate at all.
+  assertEquals(curateTripDays.sort(), [1, 1]);
+  // 2 requested days, split 1+1 across the two surviving cities.
+  assertEquals(itin.days.length, 2);
+});
+
 Deno.test("multi-city: a city returning no POIs is dropped, trip still builds shorter", async () => {
   const deps = baseDeps({
     resolveDestination: ({ placeId }: any) => Promise.resolve(
