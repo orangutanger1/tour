@@ -62,6 +62,7 @@ export async function fetchPois(opts: {
   });
   if (!res.ok) throw new Error(`places: HTTP ${res.status}`);
   const data = await res.json() as { places?: Array<Record<string, unknown>> };
+  const rawCount = data.places?.length ?? 0;
 
   const cap = BUDGET_CAP[prefs.budget];
   const pois: Poi[] = (data.places ?? [])
@@ -88,9 +89,29 @@ export async function fetchPois(opts: {
   // real radius — independent of the 50km circle cap above, which only sizes the
   // bias, not the region. No center → nothing to measure against, keep all.
   const bias = opts.locationBias;
-  const inRegion = bias
+  let inRegion = bias
     ? pois.filter((p) => haversineKm(bias.center, { lat: p.lat, lng: p.lng }) <= bias.radiusKm)
     : pois;
+
+  // A too-small radius or an off-center region centroid (e.g. a country's
+  // geographic middle paired with a 2–25 km compact/balanced radius) can drop
+  // EVERY real attraction, which then guarantees a "0 valid POIs" curation
+  // failure. When the region filter wipes an otherwise non-empty pool, fall back
+  // to the results nearest the bias center rather than starving the trip. This
+  // only triggers when the filter is clearly wrong (nothing survived), so it
+  // can't reintroduce far-off name-matches for a correctly-sized region.
+  if (bias && inRegion.length === 0 && pois.length > 0) {
+    console.warn(`fetchPois ${kind} "${location}": region filter dropped all ${pois.length} places (center ${bias.center.lat.toFixed(3)},${bias.center.lng.toFixed(3)}, radius ${bias.radiusKm.toFixed(1)}km) — falling back to nearest`);
+    inRegion = [...pois].sort((a, b) =>
+      haversineKm(bias.center, { lat: a.lat, lng: a.lng }) - haversineKm(bias.center, { lat: b.lat, lng: b.lng }));
+  }
+
+  // Surface the other way a pool comes back empty: the API itself returned
+  // nothing (bad textQuery, key/quota issue, or a location that name-matches no
+  // places). Distinct from the filter case above so the logs tell them apart.
+  if (inRegion.length === 0) {
+    console.warn(`fetchPois ${kind} "${location}": empty pool (api returned ${rawCount}, budget cap ${cap})`);
+  }
 
   if (cache) await cache.write(inRegion);
   return inRegion;

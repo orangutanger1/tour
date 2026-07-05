@@ -2,9 +2,16 @@
 import type { Itinerary } from "./types.ts";
 
 export function parseItinerary(raw: string): Itinerary {
+  // Models sometimes ignore "no markdown fences" and wrap the JSON in ```json…```
+  // or a sentence of prose. Slice to the outermost braces so a disobedient-but-
+  // valid response still parses instead of failing curation. ponytail: brace-slice,
+  // not a full fence parser — upgrade only if a model emits multiple JSON blocks.
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  const body = start >= 0 && end > start ? raw.slice(start, end + 1) : raw;
   let data: unknown;
   try {
-    data = JSON.parse(raw);
+    data = JSON.parse(body);
   } catch {
     throw new Error("itinerary: invalid JSON");
   }
