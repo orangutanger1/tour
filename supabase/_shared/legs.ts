@@ -76,3 +76,13 @@ export function splitRoundRobin<T>(items: T[], k: number): T[][] {
 export function effectiveTripDays(poolSize: number, tripDays: number): number {
   return Math.min(tripDays, Math.max(1, Math.floor(poolSize / 2)));
 }
+
+// Split tripDays across exactly n cities: base each, earlier cities take the
+// remainder. n<1 → []. A city allotted 0 (more cities than days) is dropped by
+// the caller before curation.
+export function allocateDays(tripDays: number, n: number): number[] {
+  if (n < 1) return [];
+  const base = Math.floor(tripDays / n);
+  const rem = tripDays % n;
+  return Array.from({ length: n }, (_, i) => base + (i < rem ? 1 : 0));
+}

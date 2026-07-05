@@ -1,5 +1,5 @@
 import { assertEquals, assert } from "jsr:@std/assert";
-import { planLegs, legCenters, partitionByNearest, splitRoundRobin, MAX_LEG_DAYS, effectiveTripDays } from "./legs.ts";
+import { planLegs, legCenters, partitionByNearest, splitRoundRobin, MAX_LEG_DAYS, effectiveTripDays, allocateDays } from "./legs.ts";
 
 Deno.test("planLegs: short trips are one leg", () => {
   assertEquals(planLegs(1), [1]);
@@ -73,4 +73,21 @@ Deno.test("effectiveTripDays caps days at floor(pool/2), min 1", () => {
   assertEquals(effectiveTripDays(1, 12), 1);    // never 0
   assertEquals(effectiveTripDays(0, 3), 1);
   assertEquals(effectiveTripDays(6, 2), 2);     // never exceeds request
+});
+
+Deno.test("allocateDays: even split", () => {
+  assertEquals(allocateDays(6, 3), [2, 2, 2]);
+});
+Deno.test("allocateDays: remainder goes to earlier cities", () => {
+  assertEquals(allocateDays(7, 3), [3, 2, 2]);
+});
+Deno.test("allocateDays: single city gets all days", () => {
+  assertEquals(allocateDays(7, 1), [7]);
+});
+Deno.test("allocateDays: more cities than days still gives each >=1 where possible", () => {
+  // 2 days across 3 cities: [1,1,0] — a 0-day city is dropped upstream.
+  assertEquals(allocateDays(2, 3), [1, 1, 0]);
+});
+Deno.test("allocateDays: n<1 returns empty", () => {
+  assertEquals(allocateDays(5, 0), []);
 });
