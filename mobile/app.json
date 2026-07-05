@@ -8,7 +8,7 @@
     "scheme": "mobile",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.tour.local",
       "usesAppleSignIn": true,
       "infoPlist": {

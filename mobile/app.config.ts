@@ -22,7 +22,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ...config.ios,
     bundleIdentifier: "com.tour.local",
     usesAppleSignIn: true,
-    supportsTablet: true,
+    supportsTablet: false,
   },
   plugins: [
     ...(config.plugins ?? []),
