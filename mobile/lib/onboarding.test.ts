@@ -1,6 +1,7 @@
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
-  prefsFromState, buildRequest, tripDaysOf, shouldOfferRegions, withDestination, type OnboardingState,
+  prefsFromState, buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
+  funnelPrefs, EMPTY_FUNNEL, type OnboardingState, type FunnelState,
 } from "./onboarding";
 import type { Prefs } from "./types";
 
@@ -13,12 +14,13 @@ test("INTERESTS has the fixed taxonomy", () => {
   expect(INTERESTS).toEqual(["scenic", "food", "history", "nightlife", "outdoors", "art", "shopping"]);
 });
 
-test("STEPS is the destination-first flow with ethos filler pages", () => {
+test("STEPS is the destination-first flow with the growth funnel prepended", () => {
   expect(STEPS).toEqual([
-    "intro", "destination", "dates", "classics", "interests", "travelParty", "craft",
+    "intro", "planningCheck", "hardestParts", "goals",
+    "destination", "dates", "classics", "interests", "travelParty", "craft",
     "budget", "pace", "transport", "trust", "start", "midway", "review",
   ]);
-  expect(STEP_COUNT).toBe(14);
+  expect(STEP_COUNT).toBe(17);
 });
 
 test("stateFromProfile seeds prefs, blank trip fields, round trip default", () => {
@@ -91,7 +93,9 @@ test("canContinue: interests needs at least one", () => {
 
 test("canContinue: filler pages + choice steps always pass (defaults exist)", () => {
   const alwaysPass = [
-    "intro", "classics", "travelParty", "craft", "budget", "pace", "transport", "trust", "start", "midway", "review",
+    "intro", "planningCheck", "hardestParts", "goals",
+    "classics", "travelParty", "craft", "budget", "pace", "transport", "trust",
+    "start", "midway", "review",
   ] as const;
   for (const key of alwaysPass) expect(canContinue(STEPS.indexOf(key), base)).toBe(true);
 });
@@ -115,4 +119,21 @@ test("withDestination is a no-op without a destination", () => {
   expect(withDestination(base, undefined)).toBe(base);
   expect(withDestination(base, "")).toBe(base);
   expect(withDestination(base, "   ")).toBe(base);
+});
+
+test("funnelPrefs extracts camelCase keys for the profile jsonb merge", () => {
+  const f: FunnelState = {
+    planningCheck: "improving", hardestParts: ["pacing", "stopOrder"], goals: ["saveTime"],
+  };
+  expect(funnelPrefs(f)).toEqual({
+    planningCheck: "improving", hardestParts: ["pacing", "stopOrder"], goals: ["saveTime"],
+    attributionSource: undefined,
+  });
+});
+
+test("EMPTY_FUNNEL starts with no selections", () => {
+  expect(EMPTY_FUNNEL).toEqual({ hardestParts: [], goals: [] });
+  expect(funnelPrefs(EMPTY_FUNNEL)).toEqual({
+    planningCheck: undefined, hardestParts: [], goals: [], attributionSource: undefined,
+  });
 });

@@ -15,7 +15,9 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
-  buildRequest, tripDaysOf, shouldOfferRegions, withDestination, type OnboardingState,
+  buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
+  PLANNING_CHECK, HARDEST_PARTS, GOALS, EMPTY_FUNNEL, funnelPrefs,
+  type OnboardingState, type FunnelState,
 } from "../../lib/onboarding";
 import { formatShort } from "../../lib/dates";
 import { getProfile } from "../../lib/profile";
@@ -28,6 +30,8 @@ import {
   Screen, Text, Button, Chip, Input, Icon, OptionCard, ProgressBar,
   RangeCalendar, Segmented, PressableScale, type IconName,
 } from "../../components/ui";
+import { OptionList, type Option } from "../../components/onboarding/OptionList";
+import { ChipMultiSelect, type ChipOption } from "../../components/onboarding/ChipMultiSelect";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -50,12 +54,34 @@ const TRANSPORTS: { value: Prefs["transport"]; label: string; desc: string; icon
   { value: "balanced", label: "Balanced", desc: "City + nearby. Some driving.", icon: "car" },
   { value: "far", label: "Far-ranging", desc: "Cover a wide region. Longer legs OK.", icon: "airplane" },
 ];
+const PLANNING_CHECK_OPTIONS: (Option & { value: (typeof PLANNING_CHECK)[number] })[] = [
+  { value: "great", label: "Great", desc: "I've got a system that works", icon: "happy" },
+  { value: "improving", label: "Could be better", desc: "It works, but takes a lot of manual effort", icon: "trending-up" },
+  { value: "notPlanning", label: "I don't really plan", desc: "I wing it or skip planning entirely", icon: "help-circle" },
+];
+const HARDEST_PARTS_OPTIONS: ChipOption[] = [
+  { value: "pacing", label: "Knowing what's realistic in a day" },
+  { value: "hiddenGems", label: "Finding hidden gems, not just tourist traps" },
+  { value: "stopOrder", label: "Keeping stops in a sane order" },
+  { value: "foodBreaks", label: "Fitting in food and breaks" },
+  { value: "coordinating", label: "Coordinating with the group" },
+];
+const GOALS_OPTIONS: ChipOption[] = [
+  { value: "saveTime", label: "Save time planning" },
+  { value: "avoidBacktracking", label: "Stop backtracking across town" },
+  { value: "discoverSpots", label: "Discover great local spots" },
+  { value: "stayFlexible", label: "Stay flexible on the day" },
+  { value: "lessStress", label: "Less stress, more trip" },
+];
 const TRIP_TYPES = [
   { value: "round" as TripType, label: "Round trip" },
   { value: "oneway" as TripType, label: "One way" },
 ] as const;
 const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> = {
   intro: { title: "Trips that actually work" },
+  planningCheck: { title: "How's trip planning working for you?" },
+  hardestParts: { title: "What's the hardest part of planning a trip?", sub: "Pick as many as apply." },
+  goals: { title: "What do you want out of Beacon?", sub: "Pick as many as apply." },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -153,6 +179,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(0);
   // ponytail: travelParty is filler — screen-local, not persisted, not sent to the backend.
   const [party, setParty] = useState<string | undefined>(undefined);
+  const [funnel, setFunnel] = useState<FunnelState>(EMPTY_FUNNEL);
   // Rehydrate an in-progress trip across remounts (e.g. "Edit trip" after a failed
   // generate does router.replace, which remounts this screen). lastRequest lives in
   // TripFlowProvider (above the Stack), so it survives the remount.
@@ -192,6 +219,13 @@ export default function Onboarding() {
     setState((s) => ({
       ...s,
       interests: s.interests.includes(i) ? s.interests.filter((x) => x !== i) : [...s.interests, i],
+    }));
+  }
+
+  function toggleFunnelMulti(key: "hardestParts" | "goals", value: string) {
+    setFunnel((f) => ({
+      ...f,
+      [key]: f[key].includes(value) ? f[key].filter((x) => x !== value) : [...f[key], value],
     }));
   }
 
@@ -349,6 +383,22 @@ export default function Onboarding() {
         ) : null}
 
         {page === "classics" ? <LandmarkScatter /> : null}
+
+        {page === "planningCheck" ? (
+          <OptionList
+            options={PLANNING_CHECK_OPTIONS}
+            selected={funnel.planningCheck}
+            onSelect={(v) => setFunnel((f) => ({ ...f, planningCheck: v as FunnelState["planningCheck"] }))}
+          />
+        ) : null}
+
+        {page === "hardestParts" ? (
+          <ChipMultiSelect options={HARDEST_PARTS_OPTIONS} selected={funnel.hardestParts} onToggle={(v) => toggleFunnelMulti("hardestParts", v)} />
+        ) : null}
+
+        {page === "goals" ? (
+          <ChipMultiSelect options={GOALS_OPTIONS} selected={funnel.goals} onToggle={(v) => toggleFunnelMulti("goals", v)} />
+        ) : null}
 
         {page === "travelParty" ? (
           <View className="gap-3">
