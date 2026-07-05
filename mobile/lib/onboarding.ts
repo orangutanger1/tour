@@ -11,7 +11,7 @@ export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", 
 // question whose answer is screen-local and never sent to the backend. All are unhandled
 // in canContinue → default true, so Continue is always enabled on them.
 export const STEPS = [
-  "intro", "planningCheck", "hardestParts", "goals",
+  "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
   "destination", "dates", "classics", "interests", "travelParty", "craft",
   "budget", "pace", "transport", "trust", "start", "midway", "review",
 ] as const;

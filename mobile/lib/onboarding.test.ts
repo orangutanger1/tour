@@ -16,11 +16,11 @@ test("INTERESTS has the fixed taxonomy", () => {
 
 test("STEPS is the destination-first flow with the growth funnel prepended", () => {
   expect(STEPS).toEqual([
-    "intro", "planningCheck", "hardestParts", "goals",
+    "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
     "destination", "dates", "classics", "interests", "travelParty", "craft",
     "budget", "pace", "transport", "trust", "start", "midway", "review",
   ]);
-  expect(STEP_COUNT).toBe(17);
+  expect(STEP_COUNT).toBe(18);
 });
 
 test("stateFromProfile seeds prefs, blank trip fields, round trip default", () => {
@@ -93,7 +93,7 @@ test("canContinue: interests needs at least one", () => {
 
 test("canContinue: filler pages + choice steps always pass (defaults exist)", () => {
   const alwaysPass = [
-    "intro", "planningCheck", "hardestParts", "goals",
+    "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
     "classics", "travelParty", "craft", "budget", "pace", "transport", "trust",
     "start", "midway", "review",
   ] as const;

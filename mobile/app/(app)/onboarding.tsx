@@ -82,6 +82,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   planningCheck: { title: "How's trip planning working for you?" },
   hardestParts: { title: "What's the hardest part of planning a trip?", sub: "Pick as many as apply." },
   goals: { title: "What do you want out of Beacon?", sub: "Pick as many as apply." },
+  goodPlace: { title: "You're in a good place." },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -102,6 +103,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
 //   intro: { icon: "map", blurb: "…", image: require("../../assets/images/landmarks/intro.png") }
 const INFO: Partial<Record<(typeof STEPS)[number], { icon: IconName; blurb: string; image?: number }>> = {
   intro: { icon: "map", blurb: "We sequence every day by real distances and daylight — not a random list of pins.", image: require("../../assets/images/landmarks/intro.png") },
+  goodPlace: { icon: "sparkles", blurb: "Here's what makes Beacon different." },
   craft: { icon: "navigate", blurb: "Stops are ordered to cut backtracking, with meals slotted where they naturally fit the day.", image: require("../../assets/images/landmarks/craft.png") },
   trust: { icon: "shield-checkmark", blurb: "Places, travel times, and opening hours come from live maps — so your plan holds up on the ground.", image: require("../../assets/images/landmarks/trust.png") },
   midway: { icon: "sparkles", blurb: "One last look, then we'll build your itinerary.", image: require("../../assets/images/landmarks/midway.png") },
