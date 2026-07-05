@@ -35,6 +35,7 @@ import { ChipMultiSelect, type ChipOption } from "../../components/onboarding/Ch
 import { RelateStatement } from "../../components/onboarding/RelateStatement";
 import { NotificationsStep } from "../../components/onboarding/NotificationsStep";
 import { CompareStep } from "../../components/onboarding/CompareStep";
+import { TrialOfferStep } from "../../components/onboarding/TrialOfferStep";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -100,6 +101,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   notifications: { title: "Never miss a change" },
   attribution: { title: "How'd you hear about us?" },
   compare: { title: "You're in the right place", sub: "Here's the difference." },
+  trialOffer: { title: "Go Pro" },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -301,7 +303,7 @@ export default function Onboarding() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
       <ScrollView className="flex-1" contentContainerClassName="gap-4 py-2" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Animated.View key={step} entering={FadeInRight.duration(200)} style={{ gap: 20 }}>
-        {INFO[page] ? (
+        {page === "trialOffer" ? null : INFO[page] ? (
           <View className="gap-3">
             <InfoHero icon={INFO[page]!.icon} image={INFO[page]!.image} />
             <Text variant="display" className="text-center">{prompt.title}</Text>
@@ -437,6 +439,8 @@ export default function Onboarding() {
 
         {page === "compare" ? <CompareStep /> : null}
 
+        {page === "trialOffer" ? <TrialOfferStep onDone={() => setStep((s) => s + 1)} /> : null}
+
         {page === "travelParty" ? (
           <View className="gap-3">
             {PARTIES.map((p) => (
@@ -555,7 +559,7 @@ export default function Onboarding() {
         ) : null}
         {page === "review" ? (
           <Button title="Generate my trip" size="lg" variant="gradient" onPress={onGenerate} />
-        ) : (
+        ) : page === "trialOffer" ? null : (
           <Button
             title="Continue"
             size="lg"
