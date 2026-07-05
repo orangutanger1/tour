@@ -16,11 +16,11 @@ import Animated, {
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
   buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
-  PLANNING_CHECK, HARDEST_PARTS, GOALS, EMPTY_FUNNEL, funnelPrefs,
+  PLANNING_CHECK, HARDEST_PARTS, GOALS, ATTRIBUTION_SOURCES, EMPTY_FUNNEL, funnelPrefs,
   type OnboardingState, type FunnelState,
 } from "../../lib/onboarding";
 import { formatShort } from "../../lib/dates";
-import { getProfile } from "../../lib/profile";
+import { getProfile, saveFunnelAnswers } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
 import { useTripFlow } from "../../lib/tripFlow";
 import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
@@ -61,6 +61,13 @@ const PLANNING_CHECK_OPTIONS: (Option & { value: (typeof PLANNING_CHECK)[number]
   { value: "improving", label: "Could be better", desc: "It works, but takes a lot of manual effort", icon: "trending-up" },
   { value: "notPlanning", label: "I don't really plan", desc: "I wing it or skip planning entirely", icon: "help-circle" },
 ];
+const ATTRIBUTION_OPTIONS: (Option & { value: (typeof ATTRIBUTION_SOURCES)[number] })[] = [
+  { value: "appStore", label: "App Store search", desc: "Searching for a trip planner", icon: "logo-apple" },
+  { value: "friend", label: "Friend or family", desc: "Someone told me about it", icon: "people" },
+  { value: "social", label: "Social media", desc: "Instagram, TikTok, or similar", icon: "share-social" },
+  { value: "google", label: "Google search", desc: "Search results or an ad", icon: "logo-google" },
+  { value: "other", label: "Something else", desc: "Not listed above", icon: "ellipsis-horizontal" },
+];
 const HARDEST_PARTS_OPTIONS: ChipOption[] = [
   { value: "pacing", label: "Knowing what's realistic in a day" },
   { value: "hiddenGems", label: "Finding hidden gems, not just tourist traps" },
@@ -90,6 +97,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   relateB1: { title: "Sound familiar?", sub: "I've shown up somewhere only to find out it's closed." },
   relateB2: { title: "Sound familiar?", sub: "Half my planning is just double-checking hours and travel times." },
   notifications: { title: "Never miss a change" },
+  attribution: { title: "How'd you hear about us?" },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -417,6 +425,14 @@ export default function Onboarding() {
 
         {page === "notifications" ? <NotificationsStep /> : null}
 
+        {page === "attribution" ? (
+          <OptionList
+            options={ATTRIBUTION_OPTIONS}
+            selected={funnel.attributionSource}
+            onSelect={(v) => setFunnel((f) => ({ ...f, attributionSource: v as FunnelState["attributionSource"] }))}
+          />
+        ) : null}
+
         {page === "travelParty" ? (
           <View className="gap-3">
             {PARTIES.map((p) => (
@@ -536,7 +552,15 @@ export default function Onboarding() {
         {page === "review" ? (
           <Button title="Generate my trip" size="lg" variant="gradient" onPress={onGenerate} />
         ) : (
-          <Button title="Continue" size="lg" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} />
+          <Button
+            title="Continue"
+            size="lg"
+            disabled={!canContinue(step, state)}
+            onPress={() => {
+              if (page === "attribution") saveFunnelAnswers(supabase, funnelPrefs(funnel)).catch(() => {});
+              setStep((s) => s + 1);
+            }}
+          />
         )}
       </View>
       </KeyboardAvoidingView>

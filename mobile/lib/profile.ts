@@ -62,6 +62,18 @@ export function generateUsername(base: string, rand: () => number = Math.random)
   return `${first}${digits}`;
 }
 
+// Funnel/segmentation answers (onboarding quiz + attribution) — merged into
+// default_prefs as extra camelCase keys, same as galleryStyle. Not part of
+// Prefs: these never feed a GenerateRequest.
+export async function saveFunnelAnswers(client: SupabaseClient, answers: Record<string, unknown>): Promise<void> {
+  const { data: { user } } = await client.auth.getUser();
+  if (!user) return;
+  const { data } = await client.from("profiles").select("default_prefs").eq("id", user.id).maybeSingle();
+  const prefs = (data?.default_prefs as Record<string, unknown>) ?? {};
+  const { error } = await client.from("profiles").upsert({ id: user.id, default_prefs: { ...prefs, ...answers } });
+  if (error) throw error;
+}
+
 // Generate-once handle. Unique constraint arbitrates collisions: retry with
 // fresh digits, give up after 3 (retried on the next account visit).
 export async function ensureUsername(
