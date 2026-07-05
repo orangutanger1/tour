@@ -13,9 +13,12 @@ test("INTERESTS has the fixed taxonomy", () => {
   expect(INTERESTS).toEqual(["scenic", "food", "history", "nightlife", "outdoors", "art", "shopping"]);
 });
 
-test("STEPS is the 8-page destination-first flow", () => {
-  expect(STEPS).toEqual(["destination", "dates", "interests", "budget", "pace", "transport", "start", "review"]);
-  expect(STEP_COUNT).toBe(8);
+test("STEPS is the destination-first flow with ethos filler pages", () => {
+  expect(STEPS).toEqual([
+    "intro", "destination", "dates", "classics", "interests", "travelParty", "craft",
+    "budget", "pace", "transport", "trust", "start", "midway", "review",
+  ]);
+  expect(STEP_COUNT).toBe(14);
 });
 
 test("stateFromProfile seeds prefs, blank trip fields, round trip default", () => {
@@ -66,24 +69,31 @@ test("stateFromRequest defaults tripType to round when absent (old requests)", (
   expect(stateFromRequest(req).tripType).toBe("round");
 });
 
+// Indices are computed from STEPS so these survive filler-page reordering.
 test("canContinue: destination needs a location", () => {
-  expect(canContinue(0, { ...base, location: "  " })).toBe(false);
-  expect(canContinue(0, base)).toBe(true);
+  const i = STEPS.indexOf("destination");
+  expect(canContinue(i, { ...base, location: "  " })).toBe(false);
+  expect(canContinue(i, base)).toBe(true);
 });
 
 test("canContinue: dates needs a full range", () => {
-  expect(canContinue(1, { ...base, endDate: undefined })).toBe(false);
-  expect(canContinue(1, base)).toBe(true);
-  expect(canContinue(1, { ...base, startDate: "2026-07-12", endDate: "2026-07-12" })).toBe(true); // 1-day
+  const i = STEPS.indexOf("dates");
+  expect(canContinue(i, { ...base, endDate: undefined })).toBe(false);
+  expect(canContinue(i, base)).toBe(true);
+  expect(canContinue(i, { ...base, startDate: "2026-07-12", endDate: "2026-07-12" })).toBe(true); // 1-day
 });
 
 test("canContinue: interests needs at least one", () => {
-  expect(canContinue(2, { ...base, interests: [] })).toBe(false);
-  expect(canContinue(2, base)).toBe(true);
+  const i = STEPS.indexOf("interests");
+  expect(canContinue(i, { ...base, interests: [] })).toBe(false);
+  expect(canContinue(i, base)).toBe(true);
 });
 
-test("canContinue: budget/pace/transport/start/review always pass (defaults exist)", () => {
-  for (const step of [3, 4, 5, 6, 7]) expect(canContinue(step, base)).toBe(true);
+test("canContinue: filler pages + choice steps always pass (defaults exist)", () => {
+  const alwaysPass = [
+    "intro", "classics", "travelParty", "craft", "budget", "pace", "transport", "trust", "start", "midway", "review",
+  ] as const;
+  for (const key of alwaysPass) expect(canContinue(STEPS.indexOf(key), base)).toBe(true);
 });
 
 test("prefsFromState extracts prefs", () => {

@@ -3,12 +3,11 @@
 // the toggle only changes copy; postAuth routing decides who sees onboarding.
 import { useState, type ReactNode } from "react";
 import { View, Image, Alert, ActivityIndicator, Platform, Pressable } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useAuth } from "../../lib/auth";
 import { supabase } from "../../lib/supabase";
 import { resolvePostAuthRoute } from "../../lib/postAuth";
-import { Screen, Text, Icon, PressableScale, SUNSET } from "../../components/ui";
+import { Screen, Text, Icon, PressableScale } from "../../components/ui";
 
 type Mode = "signup" | "login";
 
@@ -35,9 +34,7 @@ export default function Welcome() {
   return (
     <Screen decor>
       <View className="flex-1 justify-center items-center gap-3">
-        <LinearGradient colors={SUNSET} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" }}>
-          <Text variant="title" className="text-ink-inverse">T</Text>
-        </LinearGradient>
+        <Image source={require("../../assets/images/logo.png")} style={{ width: 72, height: 72 }} resizeMode="contain" />
         <Text variant="display" className="text-center">
           {mode === "signup" ? "Trips that feel local." : "Welcome back"}
         </Text>

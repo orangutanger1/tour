@@ -5,8 +5,15 @@ import { inclusiveDayCount } from "./dates";
 
 export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", "art", "shopping"] as const;
 
-// One question per page; index = step number.
-export const STEPS = ["destination", "dates", "interests", "budget", "pace", "transport", "start", "review"] as const;
+// One question per page; index = step number. "intro"/"craft"/"trust"/"midway" are
+// non-input ethos pages (see INFO in onboarding.tsx); "classics" scatters the landmark
+// trio (see LandmarkScatter); "travelParty" is a pure-UI filler
+// question whose answer is screen-local and never sent to the backend. All are unhandled
+// in canContinue → default true, so Continue is always enabled on them.
+export const STEPS = [
+  "intro", "destination", "dates", "classics", "interests", "travelParty", "craft",
+  "budget", "pace", "transport", "trust", "start", "midway", "review",
+] as const;
 export const STEP_COUNT = STEPS.length;
 
 export interface OnboardingState {

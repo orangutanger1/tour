@@ -1,6 +1,8 @@
 // mobile/app/_layout.tsx
 import "../global.css";
+import { useEffect, useState } from "react";
 import { Slot } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
@@ -18,6 +20,11 @@ import {
 import { AuthProvider } from "../lib/auth";
 import { TripFlowProvider } from "../lib/tripFlow";
 import { configurePurchases } from "../lib/purchases";
+import { AnimatedSplash } from "../components/AnimatedSplash";
+
+// Hold the native splash until fonts are ready; the JS AnimatedSplash then takes
+// over for the reveal animation.
+SplashScreen.preventAutoHideAsync();
 
 // staleTime keeps remounts (e.g. tab back to Passport) from refetching everything.
 // Mutations that change data invalidate their keys explicitly.
@@ -39,6 +46,13 @@ export default function RootLayout() {
     PlusJakartaSans_700Bold,
     PlusJakartaSans_800ExtraBold,
   });
+  const [splashDone, setSplashDone] = useState(false);
+
+  // Reveal our JS overlay (identical logo on white) the moment fonts are ready,
+  // so the native→animated handoff has no flash.
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
 
   if (!fontsLoaded) return null;
 
@@ -53,6 +67,7 @@ export default function RootLayout() {
           </AuthProvider>
         </PersistQueryClientProvider>
       </SafeAreaProvider>
+      {!splashDone ? <AnimatedSplash onFinish={() => setSplashDone(true)} /> : null}
     </GestureHandlerRootView>
   );
 }

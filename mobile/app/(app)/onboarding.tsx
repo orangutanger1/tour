@@ -1,12 +1,18 @@
 // mobile/app/(app)/onboarding.tsx
-// 8 one-question pages: destination → dates → interests → budget → pace →
-// transport → start point → review. One primary CTA per page.
+// One-question pages: destination → dates → interests → budget → pace →
+// transport → start point → review, interleaved with ethos "info" pages
+// (intro/craft/trust/midway) and one pure-UI filler question (travelParty).
+// One primary CTA per page. Each page enters with a slide (FadeInRight); info
+// pages float their hero. ponytail: travelParty answer is screen-local, never sent.
 import { useEffect, useState } from "react";
 import { View, Pressable, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import Constants from "expo-constants";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import Animated, { FadeInRight } from "react-native-reanimated";
+import Animated, {
+  FadeInRight, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withDelay,
+} from "react-native-reanimated";
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
   buildRequest, tripDaysOf, shouldOfferRegions, withDestination, type OnboardingState,
@@ -49,21 +55,104 @@ const TRIP_TYPES = [
   { value: "oneway" as TripType, label: "One way" },
 ] as const;
 const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> = {
+  intro: { title: "Trips that actually work" },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
+  classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
   interests: { title: "What do you love?", sub: "Pick at least one." },
+  travelParty: { title: "Who's going?", sub: "Sets the vibe of your plan." },
+  craft: { title: "Routed like a local" },
   budget: { title: "What's the budget?" },
   pace: { title: "What's your pace?" },
   transport: { title: "How far will you roam?" },
+  trust: { title: "Built on real map data" },
   start: { title: "Starting point?", sub: "Optional — home, airport, or hotel. Routes anchor here." },
+  midway: { title: "Almost there ✨" },
   review: { title: "Ready?", sub: "Tap any row to change it." },
 };
+
+// Non-input ethos pages. `image` is a swap-in landmark/illustration asset — leave
+// undefined to fall back to the Ionicons `icon` placeholder. Add e.g.
+//   intro: { icon: "map", blurb: "…", image: require("../../assets/images/landmarks/intro.png") }
+const INFO: Partial<Record<(typeof STEPS)[number], { icon: IconName; blurb: string; image?: number }>> = {
+  intro: { icon: "map", blurb: "We sequence every day by real distances and daylight — not a random list of pins.", image: require("../../assets/images/landmarks/intro.png") },
+  craft: { icon: "navigate", blurb: "Stops are ordered to cut backtracking, with meals slotted where they naturally fit the day.", image: require("../../assets/images/landmarks/craft.png") },
+  trust: { icon: "shield-checkmark", blurb: "Places, travel times, and opening hours come from live maps — so your plan holds up on the ground.", image: require("../../assets/images/landmarks/trust.png") },
+  midway: { icon: "sparkles", blurb: "One last look, then we'll build your itinerary.", image: require("../../assets/images/landmarks/midway.png") },
+};
+
+const PARTIES: { value: string; label: string; desc: string; icon: IconName }[] = [
+  { value: "solo", label: "Solo", desc: "Just me, my own pace", icon: "person" },
+  { value: "couple", label: "Couple", desc: "The two of us", icon: "heart" },
+  { value: "family", label: "Family", desc: "With kids in tow", icon: "home" },
+  { value: "friends", label: "Friends", desc: "A group trip", icon: "people" },
+];
+
+// Centered hero that fades/scales in on mount, then gently floats — used by info pages.
+function InfoHero({ icon, image }: { icon: IconName; image?: number }) {
+  const y = useSharedValue(0);
+  useEffect(() => {
+    y.value = withRepeat(withTiming(-6, { duration: 1400 }), -1, true);
+  }, []);
+  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+  // ponytail: className on Animated.* drops on device (NativeWind cssInterop) — keep it on
+  // plain Views; Animated wrappers carry style only.
+  return (
+    <Animated.View entering={FadeInDown.duration(450)} style={{ alignItems: "center", paddingVertical: 24 }}>
+      <Animated.View style={floatStyle}>
+        {image ? (
+          <Image source={image} style={{ width: 200, height: 200 }} contentFit="contain" />
+        ) : (
+          <View className="w-40 h-40 rounded-pill bg-surface-2 items-center justify-center">
+            <Icon name={icon} size={72} color="#E11D48" />
+          </View>
+        )}
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+// One scattered landmark: staggered fade-in, then a slow float at its own phase so
+// the group drifts naturally instead of in lockstep. `rotate` lives in the animated
+// transform (not the position style) so translateY doesn't clobber it.
+function FloatingLandmark({ image, size, rotate, delayMs, position }: {
+  image: number; size: number; rotate: number; delayMs: number; position: object;
+}) {
+  const y = useSharedValue(0);
+  useEffect(() => {
+    y.value = withDelay(delayMs, withRepeat(withTiming(-8, { duration: 1600 }), -1, true));
+  }, []);
+  const floatStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: y.value }, { rotate: `${rotate}deg` }],
+  }));
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(delayMs).duration(500)}
+      style={[{ position: "absolute" }, position, floatStyle]}
+    >
+      <Image source={image} style={{ width: size, height: size }} contentFit="contain" />
+    </Animated.View>
+  );
+}
+
+// Three landmarks scattered at hand-picked offsets/rotations for a natural, non-grid look.
+function LandmarkScatter() {
+  return (
+    <View style={{ height: 320 }}>
+      <FloatingLandmark image={require("../../assets/images/landmarks/eiffel.png")} size={120} rotate={-6} delayMs={0} position={{ top: 0, left: "6%" }} />
+      <FloatingLandmark image={require("../../assets/images/landmarks/colosseum.png")} size={150} rotate={5} delayMs={150} position={{ top: 92, right: "4%" }} />
+      <FloatingLandmark image={require("../../assets/images/landmarks/torii.png")} size={132} rotate={-3} delayMs={300} position={{ top: 176, left: "24%" }} />
+    </View>
+  );
+}
 
 export default function Onboarding() {
   const router = useRouter();
   const tripFlow = useTripFlow();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState(0);
+  // ponytail: travelParty is filler — screen-local, not persisted, not sent to the backend.
+  const [party, setParty] = useState<string | undefined>(undefined);
   // Rehydrate an in-progress trip across remounts (e.g. "Edit trip" after a failed
   // generate does router.replace, which remounts this screen). lastRequest lives in
   // TripFlowProvider (above the Stack), so it survives the remount.
@@ -118,20 +207,21 @@ export default function Onboarding() {
     ? "Pick start and end days — you'll loop back to where you began."
     : "Pick start and end days — you'll end in a different area.";
 
+  // Step targets derive from STEPS by name so inserted filler pages don't shift them.
   const reviewRows: { label: string; value: string; step: number }[] = [
-    { label: "Destination", value: state.location, step: 0 },
+    { label: "Destination", value: state.location, step: STEPS.indexOf("destination") },
     {
       label: "Dates",
       value: state.startDate && state.endDate
         ? `${formatShort(state.startDate)} → ${formatShort(state.endDate)} · ${days} ${days === 1 ? "day" : "days"} · ${state.tripType === "round" ? "Round trip" : "One way"}`
         : "",
-      step: 1,
+      step: STEPS.indexOf("dates"),
     },
-    { label: "Interests", value: state.interests.join(", "), step: 2 },
-    { label: "Budget", value: BUDGETS.find((b) => b.value === state.budget)!.label, step: 3 },
-    { label: "Pace", value: PACES.find((p) => p.value === state.pace)!.label, step: 4 },
-    { label: "Getting around", value: TRANSPORTS.find((t) => t.value === state.transport)!.label, step: 5 },
-    ...(state.startLocation ? [{ label: "Start", value: state.startLocation, step: 6 }] : []),
+    { label: "Interests", value: state.interests.join(", "), step: STEPS.indexOf("interests") },
+    { label: "Budget", value: BUDGETS.find((b) => b.value === state.budget)!.label, step: STEPS.indexOf("budget") },
+    { label: "Pace", value: PACES.find((p) => p.value === state.pace)!.label, step: STEPS.indexOf("pace") },
+    { label: "Getting around", value: TRANSPORTS.find((t) => t.value === state.transport)!.label, step: STEPS.indexOf("transport") },
+    ...(state.startLocation ? [{ label: "Start", value: state.startLocation, step: STEPS.indexOf("start") }] : []),
   ];
 
   return (
@@ -157,14 +247,22 @@ export default function Onboarding() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
       <ScrollView className="flex-1" contentContainerClassName="gap-4 py-2" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Animated.View key={step} entering={FadeInRight.duration(200)} style={{ gap: 20 }}>
-        <View className="gap-1">
-          <Text variant="display">{prompt.title}</Text>
-          {page === "dates" ? (
-            <Text variant="body" className="text-ink-muted">{datesSub}</Text>
-          ) : prompt.sub ? (
-            <Text variant="body" className="text-ink-muted">{prompt.sub}</Text>
-          ) : null}
-        </View>
+        {INFO[page] ? (
+          <View className="gap-3">
+            <InfoHero icon={INFO[page]!.icon} image={INFO[page]!.image} />
+            <Text variant="display" className="text-center">{prompt.title}</Text>
+            <Text variant="body" className="text-center text-ink-muted px-2">{INFO[page]!.blurb}</Text>
+          </View>
+        ) : (
+          <View className="gap-1">
+            <Text variant="display">{prompt.title}</Text>
+            {page === "dates" ? (
+              <Text variant="body" className="text-ink-muted">{datesSub}</Text>
+            ) : prompt.sub ? (
+              <Text variant="body" className="text-ink-muted">{prompt.sub}</Text>
+            ) : null}
+          </View>
+        )}
 
         {page === "destination" ? (
           <View className="gap-3">
@@ -245,6 +343,23 @@ export default function Onboarding() {
                 selected={state.interests.includes(i)}
                 onPress={() => toggleInterest(i)}
                 icon={<Icon name={INTEREST_ICONS[i]} size={16} color={state.interests.includes(i) ? "#E11D48" : "#6B5560"} />}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {page === "classics" ? <LandmarkScatter /> : null}
+
+        {page === "travelParty" ? (
+          <View className="gap-3">
+            {PARTIES.map((p) => (
+              <OptionCard
+                key={p.value}
+                icon={<Icon name={p.icon} size={20} color={party === p.value ? "#E11D48" : "#6B5560"} />}
+                title={p.label}
+                description={p.desc}
+                selected={party === p.value}
+                onPress={() => setParty(p.value)}
               />
             ))}
           </View>
