@@ -21,3 +21,4 @@ export { ProgressBar } from "./ProgressBar";
 export { Blobs } from "./Blobs";
 export { RangeCalendar } from "./RangeCalendar";
 export { Segmented } from "./Segmented";
+export { PlanCard } from "./PlanCard";
