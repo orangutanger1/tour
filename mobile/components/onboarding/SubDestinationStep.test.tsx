@@ -41,11 +41,11 @@ test("renders every region and toggles on tap", () => {
     kyotoPressable = kyotoPressable.parent;
   }
   expect(kyotoPressable).toBeTruthy();
-  expect(kyotoPressable.type).toBe(PressableScale);
+  expect(kyotoPressable!.type).toBe(PressableScale);
 
   // Trigger press and verify onToggle is called with correct payload
   act(() => {
-    kyotoPressable.props.onPress();
+    kyotoPressable!.props.onPress();
   });
   expect(onToggle).toHaveBeenCalledWith({ placeId: "B", label: "Kyoto" });
 });

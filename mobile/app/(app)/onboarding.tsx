@@ -15,7 +15,7 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
-  buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
+  buildRequest, tripDaysOf, shouldOfferRegions, withDestination, resolveStep,
   PLANNING_CHECK, HARDEST_PARTS, GOALS, ATTRIBUTION_SOURCES, EMPTY_FUNNEL, funnelPrefs,
   type OnboardingState, type FunnelState,
 } from "../../lib/onboarding";
@@ -37,6 +37,7 @@ import { RelateStatement } from "../../components/onboarding/RelateStatement";
 import { NotificationsStep } from "../../components/onboarding/NotificationsStep";
 import { CompareStep } from "../../components/onboarding/CompareStep";
 import { TrialOfferStep } from "../../components/onboarding/TrialOfferStep";
+import { SubDestinationStep } from "../../components/onboarding/SubDestinationStep";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -104,6 +105,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   compare: { title: "You're in the right place", sub: "Here's the difference." },
   trialOffer: { title: "Go Pro" },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
+  subDestinations: { title: "Where in there?", sub: "Pick the cities you want to visit — we'll build days around each." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
   interests: { title: "What do you love?", sub: "Pick at least one." },
@@ -318,7 +320,7 @@ export default function Onboarding() {
         <Pressable
           onPress={() => {
             const floor = startStep; // planning-only entries never re-enter the funnel
-            if (step > floor) setStep((s) => s - 1);
+            if (step > floor) setStep((s) => resolveStep(s - 1, regions.length > 0, -1));
             else if (router.canGoBack()) router.back();
             else router.replace("/"); // new users arrive via replace — no stack behind
           }}
@@ -393,31 +395,22 @@ export default function Onboarding() {
                 ))}
               </View>
             ) : null}
-            {regions.length > 0 ? (
-              <View className="gap-2">
-                <Text variant="label">Big place — narrow it down?</Text>
-                {regions.map((r) => (
-                  <PressableScale
-                    key={r.placeId}
-                    onPress={() => {
-                      // Region carries a real placeId — set it so the destination is
-                      // geocoded (no global autocomplete on a bare label, real bias center).
-                      setState((s) => ({ ...s, location: r.label, destinationPlaceId: r.placeId }));
-                      setSuggestions([]);
-                      setRegions([]);
-                    }}
-                    className="p-4 rounded-lg bg-surface border border-border gap-0.5"
-                  >
-                    <Text variant="body">{r.label}</Text>
-                    <Text variant="caption">{r.hook}</Text>
-                  </PressableScale>
-                ))}
-                <Pressable onPress={() => setRegions([])} className="p-2">
-                  <Text variant="caption" className="text-ink-muted">Skip — search the whole area</Text>
-                </Pressable>
-              </View>
-            ) : null}
           </View>
+        ) : null}
+
+        {page === "subDestinations" ? (
+          <SubDestinationStep
+            regions={regions}
+            selected={state.subDestinations}
+            onToggle={(r) =>
+              setState((s) => ({
+                ...s,
+                subDestinations: s.subDestinations.some((x) => x.placeId === r.placeId)
+                  ? s.subDestinations.filter((x) => x.placeId !== r.placeId)
+                  : [...s.subDestinations, r],
+              }))
+            }
+          />
         ) : null}
 
         {page === "dates" ? (
@@ -609,7 +602,7 @@ export default function Onboarding() {
             disabled={!canContinue(step, state)}
             onPress={() => {
               if (page === "attribution") saveFunnelAnswers(supabase, funnelPrefs(funnel)).catch(() => {});
-              setStep((s) => s + 1);
+              setStep((s) => resolveStep(s + 1, regions.length > 0, 1));
             }}
           />
         )}
