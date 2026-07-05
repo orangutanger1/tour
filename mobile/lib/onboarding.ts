@@ -11,10 +11,44 @@ export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", 
 // question whose answer is screen-local and never sent to the backend. All are unhandled
 // in canContinue → default true, so Continue is always enabled on them.
 export const STEPS = [
-  "intro", "destination", "dates", "classics", "interests", "travelParty", "craft",
-  "budget", "pace", "transport", "trust", "start", "midway", "review",
+  "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
+  "relateA1", "relateA2", "craft", "relateB1", "relateB2", "trust",
+  "notifications", "attribution", "compare", "trialOffer",
+  "destination", "dates", "classics", "interests", "travelParty",
+  "budget", "pace", "transport", "start", "midway", "review",
 ] as const;
 export const STEP_COUNT = STEPS.length;
+
+// Growth-funnel qualifying quiz taxonomies (bare values; labels/descriptions/
+// icons live in onboarding.tsx next to INTEREST_ICONS et al).
+export const PLANNING_CHECK = ["great", "improving", "notPlanning"] as const;
+export const HARDEST_PARTS = ["pacing", "hiddenGems", "stopOrder", "foodBreaks", "coordinating"] as const;
+export const GOALS = ["saveTime", "avoidBacktracking", "discoverSpots", "stayFlexible", "lessStress"] as const;
+export const ATTRIBUTION_SOURCES = ["appStore", "friend", "social", "google", "other"] as const;
+
+// Funnel answers are segmentation/personalization data, not trip-generation
+// inputs — kept separate from OnboardingState so buildRequest/stateFromRequest
+// (the trip-generation contract) never has to know about them.
+export interface FunnelState {
+  planningCheck?: (typeof PLANNING_CHECK)[number];
+  hardestParts: string[];
+  goals: string[];
+  attributionSource?: (typeof ATTRIBUTION_SOURCES)[number];
+}
+
+export const EMPTY_FUNNEL: FunnelState = { hardestParts: [], goals: [] };
+
+// Shape merged into profiles.default_prefs (camelCase, matching the existing
+// galleryStyle key) via lib/profile.ts's saveFunnelAnswers — never through
+// upsertProfile/prefsFromState, which are the Prefs-typed generation contract.
+export function funnelPrefs(f: FunnelState): Record<string, unknown> {
+  return {
+    planningCheck: f.planningCheck,
+    hardestParts: f.hardestParts,
+    goals: f.goals,
+    attributionSource: f.attributionSource,
+  };
+}
 
 export interface OnboardingState {
   interests: string[];

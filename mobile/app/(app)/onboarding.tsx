@@ -15,10 +15,12 @@ import Animated, {
 } from "react-native-reanimated";
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
-  buildRequest, tripDaysOf, shouldOfferRegions, withDestination, type OnboardingState,
+  buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
+  PLANNING_CHECK, HARDEST_PARTS, GOALS, ATTRIBUTION_SOURCES, EMPTY_FUNNEL, funnelPrefs,
+  type OnboardingState, type FunnelState,
 } from "../../lib/onboarding";
 import { formatShort } from "../../lib/dates";
-import { getProfile } from "../../lib/profile";
+import { getProfile, saveFunnelAnswers } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
 import { useTripFlow } from "../../lib/tripFlow";
 import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
@@ -28,6 +30,12 @@ import {
   Screen, Text, Button, Chip, Input, Icon, OptionCard, ProgressBar,
   RangeCalendar, Segmented, PressableScale, type IconName,
 } from "../../components/ui";
+import { OptionList, type Option } from "../../components/onboarding/OptionList";
+import { ChipMultiSelect, type ChipOption } from "../../components/onboarding/ChipMultiSelect";
+import { RelateStatement } from "../../components/onboarding/RelateStatement";
+import { NotificationsStep } from "../../components/onboarding/NotificationsStep";
+import { CompareStep } from "../../components/onboarding/CompareStep";
+import { TrialOfferStep } from "../../components/onboarding/TrialOfferStep";
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
@@ -50,12 +58,50 @@ const TRANSPORTS: { value: Prefs["transport"]; label: string; desc: string; icon
   { value: "balanced", label: "Balanced", desc: "City + nearby. Some driving.", icon: "car" },
   { value: "far", label: "Far-ranging", desc: "Cover a wide region. Longer legs OK.", icon: "airplane" },
 ];
+const PLANNING_CHECK_OPTIONS: (Option & { value: (typeof PLANNING_CHECK)[number] })[] = [
+  { value: "great", label: "Great", desc: "I've got a system that works", icon: "happy" },
+  { value: "improving", label: "Could be better", desc: "It works, but takes a lot of manual effort", icon: "trending-up" },
+  { value: "notPlanning", label: "I don't really plan", desc: "I wing it or skip planning entirely", icon: "help-circle" },
+];
+const ATTRIBUTION_OPTIONS: (Option & { value: (typeof ATTRIBUTION_SOURCES)[number] })[] = [
+  { value: "appStore", label: "App Store search", desc: "Searching for a trip planner", icon: "logo-apple" },
+  { value: "friend", label: "Friend or family", desc: "Someone told me about it", icon: "people" },
+  { value: "social", label: "Social media", desc: "Instagram, TikTok, or similar", icon: "share-social" },
+  { value: "google", label: "Google search", desc: "Search results or an ad", icon: "logo-google" },
+  { value: "other", label: "Something else", desc: "Not listed above", icon: "ellipsis-horizontal" },
+];
+const HARDEST_PARTS_OPTIONS: ChipOption[] = [
+  { value: "pacing", label: "Knowing what's realistic in a day" },
+  { value: "hiddenGems", label: "Finding hidden gems, not just tourist traps" },
+  { value: "stopOrder", label: "Keeping stops in a sane order" },
+  { value: "foodBreaks", label: "Fitting in food and breaks" },
+  { value: "coordinating", label: "Coordinating with the group" },
+];
+const GOALS_OPTIONS: ChipOption[] = [
+  { value: "saveTime", label: "Save time planning" },
+  { value: "avoidBacktracking", label: "Stop backtracking across town" },
+  { value: "discoverSpots", label: "Discover great local spots" },
+  { value: "stayFlexible", label: "Stay flexible on the day" },
+  { value: "lessStress", label: "Less stress, more trip" },
+];
 const TRIP_TYPES = [
   { value: "round" as TripType, label: "Round trip" },
   { value: "oneway" as TripType, label: "One way" },
 ] as const;
 const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> = {
   intro: { title: "Trips that actually work" },
+  planningCheck: { title: "How's trip planning working for you?" },
+  hardestParts: { title: "What's the hardest part of planning a trip?", sub: "Pick as many as apply." },
+  goals: { title: "What do you want out of Beacon?", sub: "Pick as many as apply." },
+  goodPlace: { title: "You're in a good place." },
+  relateA1: { title: "Sound familiar?", sub: "My last itinerary had me crossing back through the same neighborhood twice in one day." },
+  relateA2: { title: "Sound familiar?", sub: "I spend more time figuring out what order to visit places than actually picking them." },
+  relateB1: { title: "Sound familiar?", sub: "I've shown up somewhere only to find out it's closed." },
+  relateB2: { title: "Sound familiar?", sub: "Half my planning is just double-checking hours and travel times." },
+  notifications: { title: "Never miss a change" },
+  attribution: { title: "How'd you hear about us?" },
+  compare: { title: "You're in the right place", sub: "Here's the difference." },
+  trialOffer: { title: "Go Pro" },
   destination: { title: "Where to?", sub: "A city, a region, or a whole country." },
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
@@ -76,6 +122,8 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
 //   intro: { icon: "map", blurb: "…", image: require("../../assets/images/landmarks/intro.png") }
 const INFO: Partial<Record<(typeof STEPS)[number], { icon: IconName; blurb: string; image?: number }>> = {
   intro: { icon: "map", blurb: "We sequence every day by real distances and daylight — not a random list of pins.", image: require("../../assets/images/landmarks/intro.png") },
+  goodPlace: { icon: "sparkles", blurb: "Here's what makes Beacon different." },
+  notifications: { icon: "notifications", blurb: "We'll nudge you if your plan changes — nothing else." },
   craft: { icon: "navigate", blurb: "Stops are ordered to cut backtracking, with meals slotted where they naturally fit the day.", image: require("../../assets/images/landmarks/craft.png") },
   trust: { icon: "shield-checkmark", blurb: "Places, travel times, and opening hours come from live maps — so your plan holds up on the ground.", image: require("../../assets/images/landmarks/trust.png") },
   midway: { icon: "sparkles", blurb: "One last look, then we'll build your itinerary.", image: require("../../assets/images/landmarks/midway.png") },
@@ -155,6 +203,7 @@ export default function Onboarding() {
   const [step, setStep] = useState(0);
   // ponytail: travelParty is filler — screen-local, not persisted, not sent to the backend.
   const [party, setParty] = useState<string | undefined>(undefined);
+  const [funnel, setFunnel] = useState<FunnelState>(EMPTY_FUNNEL);
   // Rehydrate an in-progress trip across remounts (e.g. "Edit trip" after a failed
   // generate does router.replace, which remounts this screen). lastRequest lives in
   // TripFlowProvider (above the Stack), so it survives the remount.
@@ -194,6 +243,13 @@ export default function Onboarding() {
     setState((s) => ({
       ...s,
       interests: s.interests.includes(i) ? s.interests.filter((x) => x !== i) : [...s.interests, i],
+    }));
+  }
+
+  function toggleFunnelMulti(key: "hardestParts" | "goals", value: string) {
+    setFunnel((f) => ({
+      ...f,
+      [key]: f[key].includes(value) ? f[key].filter((x) => x !== value) : [...f[key], value],
     }));
   }
 
@@ -249,7 +305,7 @@ export default function Onboarding() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
       <ScrollView className="flex-1" contentContainerClassName="gap-4 py-2" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Animated.View key={step} entering={FadeInRight.duration(200)} style={{ gap: 20 }}>
-        {INFO[page] ? (
+        {page === "trialOffer" ? null : INFO[page] ? (
           <View className="gap-3">
             <InfoHero icon={INFO[page]!.icon} image={INFO[page]!.image} />
             <Text variant="display" className="text-center">{prompt.title}</Text>
@@ -351,6 +407,41 @@ export default function Onboarding() {
         ) : null}
 
         {page === "classics" ? <LandmarkScatter /> : null}
+
+        {page === "planningCheck" ? (
+          <OptionList
+            options={PLANNING_CHECK_OPTIONS}
+            selected={funnel.planningCheck}
+            onSelect={(v) => setFunnel((f) => ({ ...f, planningCheck: v as FunnelState["planningCheck"] }))}
+          />
+        ) : null}
+
+        {page === "hardestParts" ? (
+          <ChipMultiSelect options={HARDEST_PARTS_OPTIONS} selected={funnel.hardestParts} onToggle={(v) => toggleFunnelMulti("hardestParts", v)} />
+        ) : null}
+
+        {page === "goals" ? (
+          <ChipMultiSelect options={GOALS_OPTIONS} selected={funnel.goals} onToggle={(v) => toggleFunnelMulti("goals", v)} />
+        ) : null}
+
+        {page === "relateA1" ? <RelateStatement /> : null}
+        {page === "relateA2" ? <RelateStatement /> : null}
+        {page === "relateB1" ? <RelateStatement /> : null}
+        {page === "relateB2" ? <RelateStatement /> : null}
+
+        {page === "notifications" ? <NotificationsStep /> : null}
+
+        {page === "attribution" ? (
+          <OptionList
+            options={ATTRIBUTION_OPTIONS}
+            selected={funnel.attributionSource}
+            onSelect={(v) => setFunnel((f) => ({ ...f, attributionSource: v as FunnelState["attributionSource"] }))}
+          />
+        ) : null}
+
+        {page === "compare" ? <CompareStep /> : null}
+
+        {page === "trialOffer" ? <TrialOfferStep onDone={() => setStep((s) => s + 1)} /> : null}
 
         {page === "travelParty" ? (
           <View className="gap-3">
@@ -470,8 +561,16 @@ export default function Onboarding() {
         ) : null}
         {page === "review" ? (
           <Button title="Generate my trip" size="lg" variant="gradient" onPress={onGenerate} />
-        ) : (
-          <Button title="Continue" size="lg" disabled={!canContinue(step, state)} onPress={() => setStep((s) => s + 1)} />
+        ) : page === "trialOffer" ? null : (
+          <Button
+            title="Continue"
+            size="lg"
+            disabled={!canContinue(step, state)}
+            onPress={() => {
+              if (page === "attribution") saveFunnelAnswers(supabase, funnelPrefs(funnel)).catch(() => {});
+              setStep((s) => s + 1);
+            }}
+          />
         )}
       </View>
       </KeyboardAvoidingView>

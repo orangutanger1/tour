@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as WebBrowser from "expo-web-browser";
 import type { PurchasesPackage } from "react-native-purchases";
 import { getProPackages, purchasePro, restorePro } from "../../lib/purchases";
-import { Screen, Text, Button, Icon, PressableScale, Loading, SUNSET } from "../../components/ui";
+import { Screen, Text, Button, Icon, PressableScale, Loading, SUNSET, PlanCard } from "../../components/ui";
 
 // ponytail: repo docs as legal pages; swap for hosted URLs before App Store submission (see plan Task 9)
 const TERMS_URL = "https://github.com/orangutanger1/tour/blob/main/docs/terms-of-service.md";
@@ -17,26 +17,6 @@ const BENEFITS = [
   "Smart day-by-day routes and timing",
   "All future Pro features included",
 ];
-
-function PlanCard({ pkg, active, onPress }: { pkg: PurchasesPackage; active: boolean; onPress: () => void }) {
-  const annual = pkg.packageType === "ANNUAL";
-  return (
-    <PressableScale
-      onPress={onPress}
-      className={`flex-1 rounded-xl border-2 p-4 ${active ? "border-accent bg-accent-soft" : "border-border bg-surface"}`}
-    >
-      <View className="h-6 mb-1">
-        {annual ? (
-          <View className="self-start px-2 py-0.5 rounded-pill bg-accent">
-            <Text variant="label" className="text-ink-inverse text-[11px]">SAVE 44%</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text variant="heading">{annual ? "Annual" : "Monthly"}</Text>
-      <Text variant="caption">{pkg.product.priceString} / {annual ? "year" : "month"}</Text>
-    </PressableScale>
-  );
-}
 
 export default function Paywall() {
   const router = useRouter();

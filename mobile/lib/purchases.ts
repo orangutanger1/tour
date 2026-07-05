@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { Linking, Platform } from "react-native";
 import Constants from "expo-constants";
-import Purchases, { type CustomerInfo, type PurchasesPackage } from "react-native-purchases";
+import Purchases, { type CustomerInfo, type PurchasesPackage, type PurchasesWinBackOffer } from "react-native-purchases";
 
 const extra = Constants.expoConfig?.extra as { revenuecatIosKey?: string };
 
@@ -77,4 +77,28 @@ export async function restorePro(): Promise<boolean> {
 // Guideline 3.1.2 for apps that sell auto-renewing subscriptions.
 export async function manageSubscriptions(): Promise<void> {
   await Linking.openURL("https://apps.apple.com/account/subscriptions");
+}
+
+// Win-back (downsell) offers — iOS 18+ with StoreKit 2 only. Null/false on
+// any unsupported platform/OS version so the downsell step just skips itself
+// instead of showing a made-up discount (see lib/trialOffer.ts's honesty note).
+export async function getWinBackOffer(pkg: PurchasesPackage): Promise<PurchasesWinBackOffer | null> {
+  if (!configured) return null;
+  try {
+    const offers = await Purchases.getEligibleWinBackOffersForPackage(pkg);
+    return offers?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function purchaseWithWinBackOffer(pkg: PurchasesPackage, offer: PurchasesWinBackOffer): Promise<boolean> {
+  if (!configured) return false;
+  try {
+    const { customerInfo } = await Purchases.purchasePackageWithWinBackOffer(pkg, offer);
+    return hasPro(customerInfo);
+  } catch (e) {
+    if ((e as { userCancelled?: boolean }).userCancelled) return false;
+    throw e;
+  }
 }

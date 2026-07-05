@@ -1,4 +1,4 @@
-import { getProfile, upsertProfile, getGalleryStyle, displayName, generateUsername, ensureUsername } from "./profile";
+import { getProfile, upsertProfile, getGalleryStyle, displayName, generateUsername, ensureUsername, saveFunnelAnswers } from "./profile";
 import type { Prefs } from "./types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -160,5 +160,35 @@ test("ensureUsername throws when the username read fails", async () => {
   let wrote = false;
   const client = usernameClient({ selectError: { code: "XX000" }, onUpsert: () => { wrote = true; } });
   await expect(ensureUsername(client, u1)).rejects.toBeTruthy();
+  expect(wrote).toBe(false);
+});
+
+function profileMergeClient(opts: { existing?: Record<string, unknown>; onUpsert?: (row: unknown) => void }): SupabaseClient {
+  return {
+    auth: { getUser: async () => ({ data: { user: { id: "u1" } } }) },
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { default_prefs: opts.existing ?? {} }, error: null }) }) }),
+      upsert: async (row: unknown) => { opts.onUpsert?.(row); return { error: null }; },
+    }),
+  } as unknown as SupabaseClient;
+}
+
+test("saveFunnelAnswers merges new keys into existing default_prefs", async () => {
+  let row: unknown;
+  const client = profileMergeClient({ existing: { interests: ["food"] }, onUpsert: (r) => { row = r; } });
+  await saveFunnelAnswers(client, { planningCheck: "great", hardestParts: [], goals: [] });
+  expect(row).toEqual({
+    id: "u1",
+    default_prefs: { interests: ["food"], planningCheck: "great", hardestParts: [], goals: [] },
+  });
+});
+
+test("saveFunnelAnswers is a no-op when signed out", async () => {
+  let wrote = false;
+  const client = {
+    auth: { getUser: async () => ({ data: { user: null } }) },
+    from: () => ({ upsert: async () => { wrote = true; return { error: null }; } }),
+  } as unknown as SupabaseClient;
+  await saveFunnelAnswers(client, { goals: ["saveTime"] });
   expect(wrote).toBe(false);
 });
