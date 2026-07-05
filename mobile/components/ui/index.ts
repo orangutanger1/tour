@@ -15,6 +15,7 @@ export { Photo } from "./Photo";
 export { AlbumSection } from "./AlbumSection";
 export { Icon, type IconName } from "./Icon";
 export { PressableScale } from "./PressableScale";
+export { GlassPress } from "./GlassPress";
 export { SUNSET, SUNSET_SOFT, BLOB_ROSE, BLOB_AMBER } from "./gradients";
 export { ProgressBar } from "./ProgressBar";
 export { Blobs } from "./Blobs";
