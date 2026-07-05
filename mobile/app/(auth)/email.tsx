@@ -2,7 +2,7 @@
 // Passwordless email: enter address → 6-digit code from the email → verified.
 // Same flow signs up new users (shouldCreateUser) and logs in existing ones.
 import { useState } from "react";
-import { View, Alert, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { View, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../lib/auth";
 import { supabase } from "../../lib/supabase";
@@ -58,14 +58,16 @@ export default function Email() {
 
   return (
     <Screen>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} className="flex-1">
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <View className="flex-row items-center gap-4 mb-2">
           <Pressable onPress={() => (phase === "code" ? setPhase("email") : router.back())} hitSlop={8} className="w-10 h-10 rounded-pill bg-surface-2 items-center justify-center">
             <Icon name="chevron-back" size={18} />
           </Pressable>
         </View>
 
-        <View className="flex-1 justify-center gap-5">
+        {/* Tap anywhere outside the input to drop the keyboard — number-pad has no
+            return key, so this is the only way out of it. */}
+        <Pressable onPress={Keyboard.dismiss} className="flex-1 justify-center gap-5">
           {phase === "email" ? (
             <>
               <View className="gap-1">
@@ -79,7 +81,6 @@ export default function Email() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
-                autoFocus
               />
             </>
           ) : (
@@ -94,14 +95,14 @@ export default function Email() {
                 onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
                 keyboardType="number-pad"
                 autoFocus
-                className="text-center text-[24px] tracking-[8px]"
+                className="text-center text-[24px]"
               />
               <Pressable onPress={send} disabled={busy} hitSlop={8}>
                 <Text variant="label" className="text-center text-accent">Resend code</Text>
               </Pressable>
             </>
           )}
-        </View>
+        </Pressable>
 
         <View className="pb-2">
           {phase === "email" ? (
