@@ -88,7 +88,7 @@ export default function DestinationDetail() {
             title="Plan a trip"
             size="lg"
             variant="gradient"
-            onPress={() => router.push({ pathname: "/onboarding", params: { destination: `${d.name}, ${d.country}` } })}
+            onPress={() => router.push({ pathname: "/onboarding", params: { destination: `${d.name}, ${d.country}`, planning: "1" } })}
           />
         </View>
       </BlurView>

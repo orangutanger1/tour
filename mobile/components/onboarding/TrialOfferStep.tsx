@@ -9,7 +9,44 @@ import { LinearGradient } from "expo-linear-gradient";
 import type { PurchasesPackage, PurchasesWinBackOffer } from "react-native-purchases";
 import { getProPackages, purchasePro, getWinBackOffer, purchaseWithWinBackOffer } from "../../lib/purchases";
 import { trialDays } from "../../lib/trialOffer";
-import { Text, Button, Icon, Loading, PlanCard, SUNSET } from "../ui";
+import { Text, Button, Icon, Loading, PlanCard, Card, SUNSET } from "../ui";
+
+// What Pro unlocks vs. the free tier. Honest: the one real gate is trip count
+// (see FREE_TRIP_LIMIT in the edge fn) — the routing smarts ship in both tiers,
+// so we say so rather than invent Pro-only features.
+const FEATURES: { label: string; free: boolean | string; pro: boolean | string }[] = [
+  { label: "Smart-routed day plans", free: true, pro: true },
+  { label: "Live hours & travel times", free: true, pro: true },
+  { label: "Trips you can create", free: "1", pro: "∞" },
+  { label: "Regenerate & tweak anytime", free: false, pro: true },
+];
+
+function Cell({ v, muted }: { v: boolean | string; muted?: boolean }) {
+  if (typeof v === "string") {
+    return <Text variant="label" className={muted ? "text-ink-muted" : ""}>{v}</Text>;
+  }
+  return v
+    ? <Icon name="checkmark-circle" size={20} color="#E11D48" />
+    : <Icon name="close-circle" size={20} color="#6B5560" />;
+}
+
+function FeatureCompare() {
+  return (
+    <Card className="gap-4">
+      <View className="flex-row justify-end gap-6 pr-1">
+        <Text variant="label" className="w-12 text-center text-ink-muted">Free</Text>
+        <Text variant="label" className="w-12 text-center">Pro</Text>
+      </View>
+      {FEATURES.map((f) => (
+        <View key={f.label} className="flex-row items-center gap-3">
+          <Text variant="body" className="flex-1">{f.label}</Text>
+          <View className="w-12 items-center"><Cell v={f.free} muted /></View>
+          <View className="w-12 items-center"><Cell v={f.pro} /></View>
+        </View>
+      ))}
+    </Card>
+  );
+}
 
 export function TrialOfferStep({ onDone }: { onDone: () => void }) {
   const [packages, setPackages] = useState<PurchasesPackage[] | null>(null);
@@ -94,6 +131,8 @@ export function TrialOfferStep({ onDone }: { onDone: () => void }) {
           {days ? `Start your ${days}-day free trial.` : "Unlimited trips, smart routing, every feature."}
         </Text>
       </LinearGradient>
+
+      <FeatureCompare />
 
       {packages === null && !error ? (
         <Loading label="Loading plans…" />

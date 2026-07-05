@@ -24,6 +24,7 @@ import { getProfile, saveFunnelAnswers } from "../../lib/profile";
 import { supabase } from "../../lib/supabase";
 import { useTripFlow } from "../../lib/tripFlow";
 import { autocompletePlaces, suggestRegions, type Region } from "../../lib/placesClient";
+import { usePro } from "../../lib/purchases";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import type { Prefs, TripType } from "../../lib/types";
 import {
@@ -120,9 +121,18 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
 // Non-input ethos pages. `image` is a swap-in landmark/illustration asset — leave
 // undefined to fall back to the Ionicons `icon` placeholder. Add e.g.
 //   intro: { icon: "map", blurb: "…", image: require("../../assets/images/landmarks/intro.png") }
-const INFO: Partial<Record<(typeof STEPS)[number], { icon: IconName; blurb: string; image?: number }>> = {
+const INFO: Partial<Record<(typeof STEPS)[number], { icon: IconName; blurb: string; image?: number; iconSize?: number; points?: string[] }>> = {
   intro: { icon: "map", blurb: "We sequence every day by real distances and daylight — not a random list of pins.", image: require("../../assets/images/landmarks/intro.png") },
-  goodPlace: { icon: "sparkles", blurb: "Here's what makes Beacon different." },
+  goodPlace: {
+    icon: "sparkles",
+    iconSize: 44,
+    blurb: "Here's what makes Beacon different:",
+    points: [
+      "Days routed by real distances, so you stop backtracking across town",
+      "Live hours and travel times baked in — no showing up to a closed door",
+      "Meals and breaks slotted where they actually fit the day",
+    ],
+  },
   notifications: { icon: "notifications", blurb: "We'll nudge you if your plan changes — nothing else." },
   craft: { icon: "navigate", blurb: "Stops are ordered to cut backtracking, with meals slotted where they naturally fit the day.", image: require("../../assets/images/landmarks/craft.png") },
   trust: { icon: "shield-checkmark", blurb: "Places, travel times, and opening hours come from live maps — so your plan holds up on the ground.", image: require("../../assets/images/landmarks/trust.png") },
@@ -137,7 +147,7 @@ const PARTIES: { value: string; label: string; desc: string; icon: IconName }[] 
 ];
 
 // Centered hero that fades/scales in on mount, then gently floats — used by info pages.
-function InfoHero({ icon, image }: { icon: IconName; image?: number }) {
+function InfoHero({ icon, image, iconSize = 72 }: { icon: IconName; image?: number; iconSize?: number }) {
   const y = useSharedValue(0);
   useEffect(() => {
     y.value = withRepeat(withTiming(-6, { duration: 1400 }), -1, true);
@@ -152,7 +162,7 @@ function InfoHero({ icon, image }: { icon: IconName; image?: number }) {
           <Image source={image} style={{ width: 200, height: 200 }} contentFit="contain" />
         ) : (
           <View className="w-40 h-40 rounded-pill bg-surface-2 items-center justify-center">
-            <Icon name={icon} size={72} color="#E11D48" />
+            <Icon name={icon} size={iconSize} color="#E11D48" />
           </View>
         )}
       </Animated.View>
@@ -200,15 +210,28 @@ export default function Onboarding() {
   const router = useRouter();
   const tripFlow = useTripFlow();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState(0);
-  // ponytail: travelParty is filler — screen-local, not persisted, not sent to the backend.
-  const [party, setParty] = useState<string | undefined>(undefined);
-  const [funnel, setFunnel] = useState<FunnelState>(EMPTY_FUNNEL);
+  const { isPro } = usePro();
+  // The marketing funnel (intro…trialOffer) runs ONCE, for brand-new users on
+  // their first onboarding. Every other entry — "Plan a trip" from home, a
+  // Discover destination, editing a trip, or a Pro subscriber — starts on the
+  // trip-planning steps. "destination" is the first planning page.
+  const FUNNEL_END = STEPS.indexOf("destination");
   // Rehydrate an in-progress trip across remounts (e.g. "Edit trip" after a failed
   // generate does router.replace, which remounts this screen). lastRequest lives in
   // TripFlowProvider (above the Stack), so it survives the remount.
   const seedRequest = tripFlow.lastRequest;
-  const { destination } = useLocalSearchParams<{ destination?: string }>();
+  const { destination, planning } = useLocalSearchParams<{ destination?: string; planning?: string }>();
+  // Callers that mean "just plan a trip" pass planning=1; editing (seedRequest)
+  // is always planning-only. Those skip the funnel synchronously (no flash). Pro
+  // resolves async, so it also fast-forwards via the effect below.
+  const planningEntry = planning === "1" || !!seedRequest;
+  // startStep is where THIS session's progress bar reads 0% — the funnel steps
+  // don't count for planning-only entries.
+  const [startStep, setStartStep] = useState(planningEntry ? FUNNEL_END : 0);
+  const [step, setStep] = useState(planningEntry ? FUNNEL_END : 0);
+  // ponytail: travelParty is filler — screen-local, not persisted, not sent to the backend.
+  const [party, setParty] = useState<string | undefined>(undefined);
+  const [funnel, setFunnel] = useState<FunnelState>(EMPTY_FUNNEL);
   const [state, setState] = useState<OnboardingState>(
     seedRequest ? stateFromRequest(seedRequest) : withDestination(stateFromProfile(null), destination),
   );
@@ -222,6 +245,13 @@ export default function Onboarding() {
     if (seedRequest) return; // editing an existing trip — don't clobber it with profile defaults
     getProfile(supabase).then((prefs) => setState(withDestination(stateFromProfile(prefs), destination))).catch(() => {});
   }, []);
+
+  // usePro resolves async (false → true), so we can't seed the initial step from it.
+  // When it lands true and we're still inside the funnel, skip ahead. Guarded on
+  // seedRequest so an edit-in-progress isn't fast-forwarded.
+  useEffect(() => {
+    if (isPro && !seedRequest && step < FUNNEL_END) { setStartStep(FUNNEL_END); setStep(FUNNEL_END); }
+  }, [isPro]);
 
   useEffect(() => {
     let active = true;
@@ -287,7 +317,8 @@ export default function Onboarding() {
       <View className="flex-row items-center gap-4 mb-2">
         <Pressable
           onPress={() => {
-            if (step > 0) setStep((s) => s - 1);
+            const floor = startStep; // planning-only entries never re-enter the funnel
+            if (step > floor) setStep((s) => s - 1);
             else if (router.canGoBack()) router.back();
             else router.replace("/"); // new users arrive via replace — no stack behind
           }}
@@ -296,7 +327,7 @@ export default function Onboarding() {
         >
           <Icon name="chevron-back" size={18} />
         </Pressable>
-        <ProgressBar progress={(step + 1) / STEP_COUNT} className="flex-1" />
+        <ProgressBar progress={(step - startStep + 1) / (STEP_COUNT - startStep)} className="flex-1" />
       </View>
 
       {/* Footer sits outside the scroll area inside a KeyboardAvoidingView, so the
@@ -307,9 +338,19 @@ export default function Onboarding() {
       <Animated.View key={step} entering={FadeInRight.duration(200)} style={{ gap: 20 }}>
         {page === "trialOffer" ? null : INFO[page] ? (
           <View className="gap-3">
-            <InfoHero icon={INFO[page]!.icon} image={INFO[page]!.image} />
+            <InfoHero icon={INFO[page]!.icon} image={INFO[page]!.image} iconSize={INFO[page]!.iconSize} />
             <Text variant="display" className="text-center">{prompt.title}</Text>
             <Text variant="body" className="text-center text-ink-muted px-2">{INFO[page]!.blurb}</Text>
+            {INFO[page]!.points ? (
+              <View className="gap-3 px-2 pt-1">
+                {INFO[page]!.points!.map((p) => (
+                  <View key={p} className="flex-row gap-3">
+                    <Icon name="checkmark-circle" size={20} color="#E11D48" />
+                    <Text variant="body" className="flex-1">{p}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </View>
         ) : (
           <View className="gap-1">

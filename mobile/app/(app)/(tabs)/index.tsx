@@ -42,7 +42,7 @@ export default function Trips() {
   // excluded server-side), so every trip here already counts toward the limit.
   const tripCount = (trips ?? []).length;
   const startTrip = () =>
-    router.push(canStartNewTrip(tripCount, isPro) ? "/onboarding" : "/paywall");
+    router.push(canStartNewTrip(tripCount, isPro) ? "/onboarding?planning=1" : "/paywall");
 
   function Header() {
     return (
