@@ -135,13 +135,15 @@ function FloatingLandmark({ image, size, rotate, delayMs, position }: {
   );
 }
 
-// Three landmarks scattered at hand-picked offsets/rotations for a natural, non-grid look.
+// Five landmarks scattered at hand-picked offsets/rotations for a natural, non-grid look.
 function LandmarkScatter() {
   return (
     <View style={{ height: 320 }}>
       <FloatingLandmark image={require("../../assets/images/landmarks/eiffel.png")} size={120} rotate={-6} delayMs={0} position={{ top: 0, left: "6%" }} />
       <FloatingLandmark image={require("../../assets/images/landmarks/colosseum.png")} size={150} rotate={5} delayMs={150} position={{ top: 92, right: "4%" }} />
       <FloatingLandmark image={require("../../assets/images/landmarks/torii.png")} size={132} rotate={-3} delayMs={300} position={{ top: 176, left: "24%" }} />
+      <FloatingLandmark image={require("../../assets/images/landmarks/taj.png")} size={110} rotate={8} delayMs={450} position={{ top: 8, right: "26%" }} />
+      <FloatingLandmark image={require("../../assets/images/landmarks/taipei.png")} size={128} rotate={-4} delayMs={600} position={{ top: 210, right: "8%" }} />
     </View>
   );
 }
