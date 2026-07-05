@@ -2,14 +2,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, SectionList, Pressable, ScrollView } from "react-native";
 import { AppleMaps } from "expo-maps";
+import Constants from "expo-constants";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
 import { getTrip } from "../../lib/trips";
+import { suggestRegions } from "../../lib/placesClient";
 import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
 import { formatDayHeader, addDaysISO, inclusiveDayCount } from "../../lib/dates";
 import { Screen, Text, Button, Card, EmptyState, Loading } from "../../components/ui";
+
+const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
 export default function Itinerary() {
   const router = useRouter();
@@ -28,6 +32,7 @@ export default function Itinerary() {
   const [view, setView] = useState<"list" | "map">("list");
   const [coords, setCoords] = useState<Record<string, StopCoord>>({});
   const [selectedDay, setSelectedDay] = useState(1);
+  const [addable, setAddable] = useState<{ placeId: string; label: string }[]>([]);
 
   const days = data?.itinerary.days ?? [];
   const empty = days.length === 0 || days.every((d) => d.stops.length === 0);
@@ -45,6 +50,26 @@ export default function Itinerary() {
   useEffect(() => {
     if (placeIds.length) getStopCoords(supabase, placeIds).then(setCoords).catch(() => {});
   }, [placeIds]);
+
+  // Saved trips carry dates on the row; a just-generated trip only has them on the request.
+  const startDate = tripId ? tripQuery.data?.startDate : flow.lastRequest?.startDate;
+  const endDate = tripId ? tripQuery.data?.endDate : flow.lastRequest?.endDate;
+  const requestedDays = startDate && endDate ? inclusiveDayCount(startDate, endDate) : null;
+  const req = flow.lastRequest;
+  const short = requestedDays != null && requestedDays > days.length;
+  useEffect(() => {
+    if (!short || !req?.destinationPlaceId) { setAddable([]); return; }
+    let active = true;
+    suggestRegions({ placeId: req.destinationPlaceId, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey })
+      .then((regions) => {
+        if (!active) return;
+        const picked = new Set((req.subDestinations ?? []).map((s) => s.placeId));
+        setAddable(regions.filter((r) => !picked.has(r.placeId)).map((r) => ({ placeId: r.placeId, label: r.label })));
+      })
+      .catch(() => { if (active) setAddable([]); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [short, req?.destinationPlaceId]);
 
   if (tripId && tripQuery.isLoading) {
     return <Screen><Loading label="Loading trip…" /></Screen>;
@@ -98,10 +123,6 @@ export default function Itinerary() {
     ? [{ id: `route-${selectedDay}`, coordinates: decodePolyline(activeDay.routePolyline), color: "#E11D48", width: 4 }]
     : [];
 
-  // Saved trips carry dates on the row; a just-generated trip only has them on the request.
-  const startDate = tripId ? tripQuery.data?.startDate : flow.lastRequest?.startDate;
-  const endDate = tripId ? tripQuery.data?.endDate : flow.lastRequest?.endDate;
-  const requestedDays = startDate && endDate ? inclusiveDayCount(startDate, endDate) : null;
   const sections = days.map((d) => ({
     title: startDate ? `${formatDayHeader(addDaysISO(startDate, d.day - 1))} · Day ${d.day}` : `Day ${d.day}`,
     lodging: d.lodgingPlaceId ? coords[d.lodgingPlaceId]?.name : undefined,
@@ -131,10 +152,29 @@ export default function Itinerary() {
         </Pressable>
       </View>
       <Toggle />
-      {requestedDays != null && requestedDays > days.length ? (
-        <Text variant="caption" className="text-center mb-2">
-          Only enough local highlights for {days.length} full {days.length === 1 ? "day" : "days"} — shorter than your dates.
-        </Text>
+      {short ? (
+        <View className="mb-2 gap-2">
+          <Text variant="caption" className="text-center">
+            Only enough local highlights for {days.length} full {days.length === 1 ? "day" : "days"} — shorter than your dates.
+          </Text>
+          {addable.length > 0 ? (
+            <View className="flex-row flex-wrap justify-center gap-2">
+              {addable.map((r) => (
+                <Pressable
+                  key={r.placeId}
+                  onPress={() => {
+                    if (!req) return;
+                    flow.generate({ ...req, subDestinations: [...(req.subDestinations ?? []), r] });
+                    router.push("/generating");
+                  }}
+                  className="px-4 py-2 rounded-pill border border-accent bg-accent/10"
+                >
+                  <Text variant="label" className="text-accent">+ {r.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+        </View>
       ) : null}
       {view === "map" ? (
         <View className="flex-1">
