@@ -29,6 +29,11 @@ Deno.test("legCenters round: goes out and comes back (last leg near the first)",
   assertEquals(c[2], { lat: 0, lng: 0 });     // back near the start
 });
 
+Deno.test("legCenters round: legs=2 spreads across the region instead of collapsing to one corner", () => {
+  const c = legCenters({ center: { lat: 5, lng: 5 }, viewport: vp, legs: 2, tripType: "round" });
+  assertEquals(c, [{ lat: 0, lng: 0 }, { lat: 10, lng: 10 }]);
+});
+
 Deno.test("legCenters: no viewport → all legs at the region center", () => {
   const c = legCenters({ center: { lat: 5, lng: 5 }, viewport: null, legs: 3, tripType: "oneway" });
   assertEquals(c, [{ lat: 5, lng: 5 }, { lat: 5, lng: 5 }, { lat: 5, lng: 5 }]);

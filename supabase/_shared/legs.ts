@@ -32,7 +32,11 @@ export function legCenters(opts: { center: LatLng; viewport: Viewport; legs: num
   const out: LatLng[] = [];
   for (let i = 0; i < legs; i++) {
     const t = i / (legs - 1);                                        // 0..1
-    const u = tripType === "round" ? 1 - Math.abs(2 * t - 1) : t;    // round: 0→1→0
+    // Triangle wave needs >=3 samples to hit a distinct peak; at legs===2 both
+    // endpoints land on t=0/1 which fold to the same u=0, collapsing both leg
+    // centers onto the same viewport corner (starves one leg's POI search).
+    const u = tripType === "round" && legs >= 3 ? 1 - Math.abs(2 * t - 1) : t;
+
     out.push({ lat: low.lat + (high.lat - low.lat) * u, lng: low.lng + (high.lng - low.lng) * u });
   }
   return out;

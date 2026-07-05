@@ -486,6 +486,12 @@ function manyPois(n: number): Poi[] {
   return Array.from({ length: n }, (_, i) => ({ placeId: `P${i}`, name: `P${i}`, kind: "attraction" as const, lat: i * 0.01, lng: 0 }));
 }
 
+// Spread across the full viewport diagonal (not clustered at one corner) so
+// leg partitioning by nearest-center actually has two distinct, populated pools.
+function spreadPois(n: number): Poi[] {
+  return Array.from({ length: n }, (_, i) => ({ placeId: `P${i}`, name: `P${i}`, kind: "attraction" as const, lat: (i / (n - 1)) * 10, lng: (i / (n - 1)) * 10 }));
+}
+
 Deno.test("sparse pool: 4 attractions + 12 requested days curates 2 days in one leg", async () => {
   const curateCalls: number[] = [];
   const pool = manyPois(4);
@@ -502,7 +508,7 @@ Deno.test("sparse pool: 4 attractions + 12 requested days curates 2 days in one 
 
 Deno.test("rich pool keeps multi-leg split for long trips", async () => {
   const curateCalls: number[] = [];
-  const pool = manyPois(40);
+  const pool = spreadPois(40);
   const fakeItin = (days: number, offset: number): Itinerary => ({
     days: Array.from({ length: days }, (_, i) => ({ day: i + 1, lodgingPlaceId: null, stops: [{ placeId: `P${offset + i}`, name: "p", blurb: "x" }] })),
   });
