@@ -17,6 +17,7 @@ import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
   buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
   PLANNING_CHECK, HARDEST_PARTS, GOALS, ATTRIBUTION_SOURCES, EMPTY_FUNNEL, funnelPrefs,
+  DIET_LIFESTYLE, DIET_ALLERGY,
   type OnboardingState, type FunnelState,
 } from "../../lib/onboarding";
 import { formatShort } from "../../lib/dates";
@@ -106,6 +107,7 @@ const PROMPTS: Record<(typeof STEPS)[number], { title: string; sub?: string }> =
   dates: { title: "When?" },
   classics: { title: "Icons & hidden gems", sub: "We mix the must-sees with the spots only locals flag." },
   interests: { title: "What do you love?", sub: "Pick at least one." },
+  diet: { title: "Any dietary needs?", sub: "Optional — we'll match restaurants." },
   travelParty: { title: "Who's going?", sub: "Sets the vibe of your plan." },
   craft: { title: "Routed like a local" },
   budget: { title: "What's the budget?" },
@@ -212,6 +214,7 @@ export default function Onboarding() {
   const [state, setState] = useState<OnboardingState>(
     seedRequest ? stateFromRequest(seedRequest) : withDestination(stateFromProfile(null), destination),
   );
+  const [dietDraft, setDietDraft] = useState("");
   const [suggestions, setSuggestions] = useState<{ text: string; placeId: string; types: string[] }[]>([]);
   const debouncedLocation = useDebouncedValue(state.location, 300);
   const [regions, setRegions] = useState<Region[]>([]);
@@ -246,6 +249,23 @@ export default function Onboarding() {
     }));
   }
 
+  function toggleDiet(term: string) {
+    setState((s) => ({
+      ...s,
+      diet: s.diet.includes(term) ? s.diet.filter((x) => x !== term) : [...s.diet, term],
+    }));
+  }
+
+  function addDietDraft() {
+    const t = dietDraft.trim().toLowerCase();
+    if (t && !state.diet.includes(t)) setState((s) => ({ ...s, diet: [...s.diet, t] }));
+    setDietDraft("");
+  }
+
+  function clearDiet() {
+    setState((s) => ({ ...s, diet: [] }));
+  }
+
   function toggleFunnelMulti(key: "hardestParts" | "goals", value: string) {
     setFunnel((f) => ({
       ...f,
@@ -276,6 +296,7 @@ export default function Onboarding() {
       step: STEPS.indexOf("dates"),
     },
     { label: "Interests", value: state.interests.join(", "), step: STEPS.indexOf("interests") },
+    { label: "Dietary", value: state.diet.length ? state.diet.join(", ") : "No restrictions", step: STEPS.indexOf("diet") },
     { label: "Budget", value: BUDGETS.find((b) => b.value === state.budget)!.label, step: STEPS.indexOf("budget") },
     { label: "Pace", value: PACES.find((p) => p.value === state.pace)!.label, step: STEPS.indexOf("pace") },
     { label: "Getting around", value: TRANSPORTS.find((t) => t.value === state.transport)!.label, step: STEPS.indexOf("transport") },
@@ -403,6 +424,52 @@ export default function Onboarding() {
                 icon={<Icon name={INTEREST_ICONS[i]} size={16} color={state.interests.includes(i) ? "#E11D48" : "#6B5560"} />}
               />
             ))}
+          </View>
+        ) : null}
+
+        {page === "diet" ? (
+          <View className="gap-4">
+            <View className="gap-2">
+              <Text variant="label" className="text-ink-muted">Lifestyle</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {DIET_LIFESTYLE.map((d) => (
+                  <Chip key={d} label={d} selected={state.diet.includes(d)} onPress={() => toggleDiet(d)} />
+                ))}
+              </View>
+            </View>
+            <View className="gap-2">
+              <Text variant="label" className="text-ink-muted">Allergies</Text>
+              <View className="flex-row flex-wrap gap-2">
+                {DIET_ALLERGY.map((d) => (
+                  <Chip key={d} label={d} selected={state.diet.includes(d)} onPress={() => toggleDiet(d)} />
+                ))}
+              </View>
+            </View>
+            {state.diet.filter((d) => !DIET_LIFESTYLE.includes(d as never) && !DIET_ALLERGY.includes(d as never)).length > 0 ? (
+              <View className="flex-row flex-wrap gap-2">
+                {state.diet
+                  .filter((d) => !DIET_LIFESTYLE.includes(d as never) && !DIET_ALLERGY.includes(d as never))
+                  .map((d) => (
+                    <Chip key={d} label={d} selected onPress={() => toggleDiet(d)} />
+                  ))}
+              </View>
+            ) : null}
+            <View className="flex-row gap-2 items-center">
+              <View className="flex-1">
+                <Input
+                  value={dietDraft}
+                  onChangeText={setDietDraft}
+                  placeholder="Add your own…"
+                  onSubmitEditing={addDietDraft}
+                  returnKeyType="done"
+                  autoCorrect={false}
+                />
+              </View>
+              <Button title="Add" variant="secondary" onPress={addDietDraft} />
+            </View>
+            <Pressable onPress={clearDiet} hitSlop={8}>
+              <Text variant="label" className={state.diet.length === 0 ? "text-accent" : "text-ink-muted"}>No restrictions</Text>
+            </Pressable>
           </View>
         ) : null}
 
