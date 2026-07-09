@@ -4,6 +4,8 @@ import type { GenerateRequest } from "./api";
 import { inclusiveDayCount } from "./dates";
 
 export const INTERESTS = ["scenic", "food", "history", "nightlife", "outdoors", "art", "shopping"] as const;
+export const DIET_LIFESTYLE = ["vegetarian", "vegan", "pescatarian", "halal", "kosher"] as const;
+export const DIET_ALLERGY = ["gluten-free", "dairy-free", "nut allergy", "shellfish allergy"] as const;
 
 // One question per page; index = step number. "intro"/"craft"/"trust"/"midway" are
 // non-input ethos pages (see INFO in onboarding.tsx); "classics" scatters the landmark
@@ -14,7 +16,7 @@ export const STEPS = [
   "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
   "relateA1", "relateA2", "craft", "relateB1", "relateB2", "trust",
   "notifications", "attribution", "compare", "trialOffer",
-  "destination", "dates", "classics", "interests", "travelParty",
+  "destination", "dates", "classics", "interests", "diet", "travelParty",
   "budget", "pace", "transport", "start", "midway", "review",
 ] as const;
 export const STEP_COUNT = STEPS.length;
@@ -52,6 +54,7 @@ export function funnelPrefs(f: FunnelState): Record<string, unknown> {
 
 export interface OnboardingState {
   interests: string[];
+  diet: string[];
   budget: Prefs["budget"];
   pace: Prefs["pace"];
   transport: Prefs["transport"];
@@ -67,6 +70,7 @@ export interface OnboardingState {
 export function stateFromProfile(prefs: Prefs | null): OnboardingState {
   return {
     interests: prefs?.interests ?? [],
+    diet: prefs?.diet ?? [],
     budget: prefs?.budget ?? "mid",
     pace: prefs?.pace ?? "balanced",
     transport: prefs?.transport ?? "balanced",
@@ -85,6 +89,7 @@ export function stateFromProfile(prefs: Prefs | null): OnboardingState {
 export function stateFromRequest(req: GenerateRequest): OnboardingState {
   return {
     interests: req.prefs.interests,
+    diet: req.prefs.diet ?? [],
     budget: req.prefs.budget,
     pace: req.prefs.pace,
     transport: req.prefs.transport,
@@ -119,7 +124,7 @@ export function canContinue(step: number, s: OnboardingState): boolean {
 }
 
 export function prefsFromState(s: OnboardingState): Prefs {
-  return { interests: s.interests, budget: s.budget, pace: s.pace, transport: s.transport };
+  return { interests: s.interests, budget: s.budget, pace: s.pace, transport: s.transport, diet: s.diet };
 }
 
 export function buildRequest(s: OnboardingState): GenerateRequest {

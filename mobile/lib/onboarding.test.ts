@@ -1,12 +1,12 @@
 import {
   INTERESTS, STEPS, STEP_COUNT, stateFromProfile, stateFromRequest, canContinue,
   prefsFromState, buildRequest, tripDaysOf, shouldOfferRegions, withDestination,
-  funnelPrefs, EMPTY_FUNNEL, type OnboardingState, type FunnelState,
+  funnelPrefs, EMPTY_FUNNEL, DIET_LIFESTYLE, DIET_ALLERGY, type OnboardingState, type FunnelState,
 } from "./onboarding";
 import type { Prefs } from "./types";
 
 const base: OnboardingState = {
-  interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced",
+  interests: ["food"], diet: [], budget: "mid", pace: "balanced", transport: "balanced",
   location: "Lisbon", startDate: "2026-07-12", endDate: "2026-07-18", tripType: "round",
 };
 
@@ -19,10 +19,10 @@ test("STEPS is the destination-first flow with the growth funnel prepended", () 
     "intro", "planningCheck", "hardestParts", "goals", "goodPlace",
     "relateA1", "relateA2", "craft", "relateB1", "relateB2", "trust",
     "notifications", "attribution", "compare", "trialOffer",
-    "destination", "dates", "classics", "interests", "travelParty",
+    "destination", "dates", "classics", "interests", "diet", "travelParty",
     "budget", "pace", "transport", "start", "midway", "review",
   ]);
-  expect(STEP_COUNT).toBe(26);
+  expect(STEP_COUNT).toBe(27);
 });
 
 test("stateFromProfile seeds prefs, blank trip fields, round trip default", () => {
@@ -59,7 +59,7 @@ test("buildRequest emits dates, trip type, and derived tripDays", () => {
 
 test("stateFromRequest round-trips buildRequest (rehydrate in-progress trip)", () => {
   const s: OnboardingState = {
-    interests: ["scenic", "food"], budget: "high", pace: "balanced", transport: "far",
+    interests: ["scenic", "food"], diet: [], budget: "high", pace: "balanced", transport: "far",
     location: "Canada", destinationPlaceId: "p-canada",
     startDate: "2026-08-01", endDate: "2026-08-21", tripType: "oneway",
     startLocation: "YVR", startPlaceId: "p-yvr",
@@ -108,7 +108,7 @@ test("canContinue: filler pages + choice steps always pass (defaults exist)", ()
 });
 
 test("prefsFromState extracts prefs", () => {
-  expect(prefsFromState(base)).toEqual({ interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced" });
+  expect(prefsFromState(base)).toEqual({ interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced", diet: [] });
 });
 
 test("shouldOfferRegions for country / admin_area_1 only", () => {
@@ -143,4 +143,29 @@ test("EMPTY_FUNNEL starts with no selections", () => {
   expect(funnelPrefs(EMPTY_FUNNEL)).toEqual({
     planningCheck: undefined, hardestParts: [], goals: [], attributionSource: undefined,
   });
+});
+
+test("prefsFromState carries diet", () => {
+  expect(prefsFromState({ ...base, diet: ["vegan", "nut allergy"] }).diet).toEqual(["vegan", "nut allergy"]);
+});
+
+test("stateFromProfile reads diet (default [])", () => {
+  expect(stateFromProfile(null).diet).toEqual([]);
+  expect(stateFromProfile({ interests: [], budget: "mid", pace: "balanced", transport: "balanced", diet: ["halal"] }).diet).toEqual(["halal"]);
+});
+
+test("stateFromRequest reads diet", () => {
+  const req = { location: "X", tripDays: 2, prefs: { interests: ["food"], budget: "mid", pace: "balanced", transport: "balanced", diet: ["kosher"] } } as never;
+  expect(stateFromRequest(req).diet).toEqual(["kosher"]);
+});
+
+test("diet step sits between interests and travelParty", () => {
+  expect(STEPS.indexOf("diet")).toBe(STEPS.indexOf("interests") + 1);
+  expect(STEPS.indexOf("diet")).toBeLessThan(STEPS.indexOf("travelParty"));
+});
+
+test("diet option sets are non-empty and disjoint", () => {
+  expect(DIET_LIFESTYLE.length).toBeGreaterThan(0);
+  expect(DIET_ALLERGY.length).toBeGreaterThan(0);
+  expect(DIET_LIFESTYLE.some((d) => DIET_ALLERGY.includes(d))).toBe(false);
 });
