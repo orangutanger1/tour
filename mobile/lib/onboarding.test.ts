@@ -167,5 +167,5 @@ test("diet step sits between interests and travelParty", () => {
 test("diet option sets are non-empty and disjoint", () => {
   expect(DIET_LIFESTYLE.length).toBeGreaterThan(0);
   expect(DIET_ALLERGY.length).toBeGreaterThan(0);
-  expect(DIET_LIFESTYLE.some((d) => DIET_ALLERGY.includes(d))).toBe(false);
+  expect(DIET_LIFESTYLE.some((d) => (DIET_ALLERGY as readonly string[]).includes(d))).toBe(false);
 });
