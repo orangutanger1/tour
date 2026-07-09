@@ -20,3 +20,4 @@ node_modules/
 # visual brainstorm companion
 .superpowers/
 .worktrees/
+marketing/scripts/.ruff_cache/
