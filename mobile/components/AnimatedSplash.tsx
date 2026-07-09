@@ -8,6 +8,7 @@
 // the asset registry with fadeDuration 0 — no flicker.
 import { useEffect } from "react";
 import { Image } from "react-native";
+import * as SplashScreen from "expo-splash-screen";
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withDelay, runOnJS,
 } from "react-native-reanimated";
@@ -20,12 +21,27 @@ export function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
   const opacity = useSharedValue(1);
 
   useEffect(() => {
+    // Hide the native splash only once this overlay has actually painted a
+    // frame (two rAF ticks after mount), so there's no gap where the native
+    // splash is gone but this overlay hasn't drawn yet.
+    let raf1 = 0, raf2 = 0;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        SplashScreen.hideAsync();
+      });
+    });
+
     opacity.value = withDelay(
       650,
       withTiming(0, { duration: 400 }, (finished) => {
         if (finished) runOnJS(onFinish)();
       }),
     );
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
   }, []);
 
   const containerStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));

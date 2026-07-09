@@ -1,6 +1,6 @@
 // mobile/app/_layout.tsx
 import "../global.css";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Slot } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -53,24 +53,6 @@ export default function RootLayout() {
 		PlusJakartaSans_800ExtraBold,
 	});
 	const [splashDone, setSplashDone] = useState(false);
-	const [jsSplashReady, setJsSplashReady] = useState(false);
-
-	// Render the JS splash BEFORE hiding the native splash so the handoff has
-	// zero flicker: the native splash hides WHILE the JS splash is already
-	// painted on top of the app content.
-	useEffect(() => {
-		if (fontsLoaded) setJsSplashReady(true);
-	}, [fontsLoaded]);
-
-	useEffect(() => {
-		// Hide the native splash only after the JS splash has had a chance to mount.
-		// jsSplashReady flips in the same tick as the render that adds AnimatedSplash,
-		// so batch it behind a microtask so the component actually paints first.
-		if (jsSplashReady) {
-			const id = setTimeout(() => SplashScreen.hideAsync(), 0);
-			return () => clearTimeout(id);
-		}
-	}, [jsSplashReady]);
 
 	if (!fontsLoaded) return null;
 
@@ -88,7 +70,7 @@ export default function RootLayout() {
 					</AuthProvider>
 				</PersistQueryClientProvider>
 			</SafeAreaProvider>
-			{jsSplashReady && !splashDone ? (
+			{!splashDone ? (
 				<AnimatedSplash onFinish={() => setSplashDone(true)} />
 			) : null}
 		</GestureHandlerRootView>
