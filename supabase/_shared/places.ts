@@ -12,6 +12,13 @@ const TYPE_QUERY: Record<Poi["kind"], string> = {
   lodging: "hotel",
 };
 
+export const ALLERGY_SET = new Set(["gluten-free", "dairy-free", "nut allergy", "shellfish allergy"]);
+
+export function foodTextQuery(location: string, dietTerms: string[]): string {
+  const prefix = dietTerms.length ? `${dietTerms.join(" ")} ` : "";
+  return `${prefix}restaurant in ${location}`;
+}
+
 const PRICE_MAP: Record<string, number> = {
   PRICE_LEVEL_FREE: 0,
   PRICE_LEVEL_INEXPENSIVE: 1,
@@ -37,10 +44,11 @@ export async function fetchPois(opts: {
   locationBias?: { center: { lat: number; lng: number }; radiusKm: number };
 }): Promise<Poi[]> {
   const { location, kind, prefs, httpFetch, apiKey, cache } = opts;
-  const body: Record<string, unknown> = {
-    textQuery: `${TYPE_QUERY[kind]} in ${location}`,
-    maxResultCount: 20,
-  };
+  const dietTerms = opts.kind === "food" ? (opts.prefs.diet ?? []) : [];
+  const textQuery = opts.kind === "food"
+    ? foodTextQuery(location, dietTerms)
+    : `${TYPE_QUERY[opts.kind]} in ${location}`;
+  const body: Record<string, unknown> = { textQuery, maxResultCount: 20 };
   if (opts.locationBias) {
     // searchText circle radius is hard-capped at 50 km by the API
     const radius = Math.min(opts.locationBias.radiusKm * 1000, 50000);
@@ -91,6 +99,16 @@ export async function fetchPois(opts: {
   const inRegion = bias
     ? pois.filter((p) => haversineKm(bias.center, { lat: p.lat, lng: p.lng }) <= bias.radiusKm)
     : pois;
+
+  // Diet hybrid: an empty food pool with a lifestyle/free-text restriction retries
+  // once with a plain restaurant query (soft). An allergy restriction does NOT
+  // fall back — an unsafe suggestion is worse than a meal-gap.
+  if (opts.kind === "food" && inRegion.length === 0 && dietTerms.length > 0) {
+    const hasAllergy = dietTerms.some((t) => ALLERGY_SET.has(t));
+    if (!hasAllergy) {
+      return await fetchPois({ ...opts, prefs: { ...opts.prefs, diet: [] } });
+    }
+  }
 
   if (cache) await cache.write(inRegion);
   return inRegion;
