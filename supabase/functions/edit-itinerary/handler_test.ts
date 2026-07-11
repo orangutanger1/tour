@@ -43,3 +43,29 @@ Deno.test("200 re-routes: attractions reordered, times + polyline set, meal kept
   assertEquals(day.routePolyline, "xyz");
   assertEquals(day.stops.some((s) => s.mealSlot === "lunch"), true);
 });
+
+Deno.test("attraction with no cached coords (e.g. freshly-added search pick) is not dropped", async () => {
+  const itinWithUncoordinated: Itinerary = {
+    days: [{
+      day: 1, lodgingPlaceId: null,
+      stops: [
+        { placeId: "A", name: "A", blurb: "", kind: "attraction", dwellMinutes: 60 },
+        { placeId: "B", name: "B", blurb: "", kind: "attraction", dwellMinutes: 60 },
+        { placeId: "C", name: "C (new pick)", blurb: "", kind: "attraction", dwellMinutes: 60 },
+        { placeId: "", name: "Lunch", blurb: "", kind: "meal-gap", mealSlot: "lunch", dwellMinutes: 60 },
+      ],
+    }],
+  };
+  const depsWithGap: EditItineraryDeps = {
+    ...deps,
+    loadItinerary: () => Promise.resolve(itinWithUncoordinated),
+    // "C" has no entry here — mimics an autocomplete pick with no cached_pois row.
+    coordsFor: () => Promise.resolve({ A: { lat: 0, lng: 0 }, B: { lat: 0, lng: 0.2 } }),
+  };
+  const r = await handleEditItinerary({ tripId: "t", day: 1 }, depsWithGap);
+  assertEquals(r.status, 200);
+  const day = (r.body as { day: Itinerary["days"][number] }).day;
+  const attrs = day.stops.filter((s) => s.kind === "attraction");
+  assertEquals(attrs.some((s) => s.placeId === "C"), true);
+  assertEquals(attrs.map((s) => s.placeId).sort(), ["A", "B", "C"]);
+});

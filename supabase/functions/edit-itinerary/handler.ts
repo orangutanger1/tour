@@ -39,10 +39,17 @@ export async function handleEditItinerary(
     const { ordered, polyline: pl } = await deps.orderDay({ stops: dayPois, anchor: centroid });
     polyline = pl;
     const travelById = new Map(ordered.map((o) => [o.placeId, o.travelMinutesFromPrev]));
-    orderedStops = ordered
+    const routed = ordered
       .map((o) => attractions.find((s) => s.placeId === o.placeId))
       .filter((s): s is Stop => !!s)
       .map((s) => ({ ...s, travelMinutesFromPrev: travelById.get(s.placeId) }));
+    // Attractions without resolvable coords (e.g. freshly-added search picks with
+    // no cached_pois row) are excluded from routing above; append them at the end
+    // so they aren't silently dropped from the day.
+    const unrouted = attractions
+      .filter((s) => !travelById.has(s.placeId))
+      .map((s) => ({ ...s, travelMinutesFromPrev: s.travelMinutesFromPrev ?? 0 }));
+    orderedStops = [...routed, ...unrouted];
   }
 
   const lunch = target.stops.find((s) => s.mealSlot === "lunch")

@@ -49,8 +49,13 @@ export function reorderStops(itin: Itinerary, day: number, from: number, to: num
     if (from < 0 || from >= attractions.length || to < 0 || to >= attractions.length) return d;
     const [moved] = attractions.splice(from, 1);
     attractions.splice(to, 0, moved);
-    // Rebuild: attractions in new order, meals dropped (scheduler re-inserts them).
-    return { ...d, stops: attractions };
+    // Re-interleave: walk the original stops, swapping each attraction slot for
+    // the next item in the new attraction order while passing meal/meal-gap
+    // stops through unchanged (so real restaurant picks — mealSlot/placeId —
+    // survive a reorder instead of being dropped and re-synthesized).
+    let next = 0;
+    const stops = d.stops.map((s) => (isAttraction(s) ? attractions[next++] : s));
+    return { ...d, stops };
   });
 }
 

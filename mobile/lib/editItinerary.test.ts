@@ -28,6 +28,17 @@ test("reorderStops moves within attractions only", () => {
   expect(out.days[0].stops.filter(isAttraction).map((s) => s.name)).toEqual(["B", "C", "A"]);
 });
 
+test("reorderStops preserves the real meal stop (mealSlot + placeId survive)", () => {
+  const out = reorderStops(itin(), 1, 0, 2); // A -> after C
+  const mealOut = out.days[0].stops.find((s) => s.kind === "meal");
+  expect(mealOut).toBeDefined();
+  expect(mealOut?.mealSlot).toBe("lunch");
+  expect(mealOut?.placeId).toBe("r");
+  expect(mealOut?.name).toBe("Lunch");
+  // meal stays in its original relative position (index 1, between A-slot and B-slot)
+  expect(out.days[0].stops.map((s) => s.name)).toEqual(["B", "Lunch", "C", "A"]);
+});
+
 test("replaceStop swaps the Nth attraction", () => {
   const out = replaceStop(itin(), 1, 0, attr("Z"));
   expect(out.days[0].stops.filter(isAttraction).map((s) => s.name)).toEqual(["Z", "B", "C"]);
