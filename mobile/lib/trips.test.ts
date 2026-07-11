@@ -1,4 +1,4 @@
-import { listTrips, getTrip, tripDayCount, getTripStatus, type TripSummary } from "./trips";
+import { listTrips, getTrip, tripDayCount, getTripStatus, updateTripItinerary, type TripSummary } from "./trips";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Itinerary } from "./types";
 
@@ -81,4 +81,21 @@ test("getTripStatus null when row missing", async () => {
 test("getTripStatus defaults pre-migration rows to ready", async () => {
   const s = await getTripStatus(statusClient({ data: { status: null, error_message: null }, error: null }), "t1");
   expect(s).toEqual({ status: "ready", errorMessage: undefined });
+});
+
+test("updateTripItinerary issues scoped update", async () => {
+  const eq = jest.fn().mockResolvedValue({ error: null });
+  const update = jest.fn().mockReturnValue({ eq });
+  const from = jest.fn().mockReturnValue({ update });
+  const client = { from } as never;
+  await updateTripItinerary(client, "t1", { days: [] });
+  expect(from).toHaveBeenCalledWith("trips");
+  expect(update).toHaveBeenCalledWith({ itinerary: { days: [] } });
+  expect(eq).toHaveBeenCalledWith("id", "t1");
+});
+
+test("updateTripItinerary throws on error", async () => {
+  const eq = jest.fn().mockResolvedValue({ error: new Error("nope") });
+  const client = { from: () => ({ update: () => ({ eq }) }) } as never;
+  await expect(updateTripItinerary(client, "t1", { days: [] })).rejects.toThrow("nope");
 });

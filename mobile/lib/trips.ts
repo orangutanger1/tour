@@ -76,3 +76,12 @@ export async function getTripStatus(
   const status = row.status === "generating" || row.status === "failed" ? row.status : "ready";
   return { status, errorMessage: row.error_message ?? undefined };
 }
+
+export async function updateTripItinerary(
+  client: SupabaseClient,
+  id: string,
+  itinerary: Itinerary,
+): Promise<void> {
+  const { error } = await client.from("trips").update({ itinerary }).eq("id", id);
+  if (error) throw error;
+}
