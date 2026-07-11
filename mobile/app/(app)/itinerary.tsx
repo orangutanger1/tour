@@ -4,17 +4,26 @@ import { View, SectionList, Pressable, ScrollView } from "react-native";
 import { AppleMaps } from "expo-maps";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import Constants from "expo-constants";
 import { useTripFlow } from "../../lib/tripFlow";
 import { supabase } from "../../lib/supabase";
-import { getTrip } from "../../lib/trips";
+import { getTrip, updateTripItinerary } from "../../lib/trips";
 import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
 import { formatDayHeader, addDaysISO, inclusiveDayCount } from "../../lib/dates";
-import { Screen, Text, Button, Card, EmptyState, Loading } from "../../components/ui";
+import { Screen, Text, Button, Card, EmptyState, Loading, Icon } from "../../components/ui";
+import { removeStop } from "../../lib/editItinerary";
+import { scheduleDayClient } from "../../lib/scheduleClient";
+import { requestDayReroute } from "../../lib/editClient";
+import { useAuth } from "../../lib/auth";
+import type { Itinerary } from "../../lib/types";
+
+const extra = Constants.expoConfig?.extra as { supabaseUrl: string };
 
 export default function Itinerary() {
   const router = useRouter();
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
   const flow = useTripFlow();
+  const { session } = useAuth();
 
   const tripQuery = useQuery({
     queryKey: ["trip", tripId],
@@ -24,13 +33,60 @@ export default function Itinerary() {
 
   // When opened from a saved trip use the DB row; otherwise the just-generated flow.
   const data = tripId ? (tripQuery.data ?? undefined) : flow.data;
+  const resolvedTripId = (tripId as string | undefined) ?? flow.data?.tripId;
 
   const [view, setView] = useState<"list" | "map">("list");
   const [coords, setCoords] = useState<Record<string, StopCoord>>({});
   const [selectedDay, setSelectedDay] = useState(1);
+  const [edited, setEdited] = useState<Itinerary | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [approx, setApprox] = useState(false);
 
-  const days = data?.itinerary.days ?? [];
+  const plainCoords = useMemo(
+    () => Object.fromEntries(Object.entries(coords).map(([k, v]) => [k, { lat: v.lat, lng: v.lng }])),
+    [coords],
+  );
+
+  const working: Itinerary = edited ?? data?.itinerary ?? { days: [] };
+  const days = working.days;
   const empty = days.length === 0 || days.every((d) => d.stops.length === 0);
+
+  async function applyEdit(next: Itinerary, changedDay: number) {
+    const rescheduled: Itinerary = {
+      ...next,
+      days: next.days.map((d) => (d.day === changedDay ? scheduleDayClient(d, plainCoords) : d)),
+    };
+    const previous = edited;
+    setEdited(rescheduled); // optimistic
+    setApprox(true);
+    if (!resolvedTripId) return;
+    try {
+      await updateTripItinerary(supabase, resolvedTripId, rescheduled);
+    } catch {
+      // revert on persist failure
+      setEdited(previous);
+      setApprox(false);
+      return;
+    }
+    const token = session?.access_token;
+    if (!token) return;
+    const fresh = await requestDayReroute({
+      tripId: resolvedTripId,
+      day: changedDay,
+      accessToken: token,
+      baseUrl: extra.supabaseUrl,
+    });
+    if (fresh) {
+      setEdited((cur) => (cur ? { ...cur, days: cur.days.map((d) => (d.day === changedDay ? fresh : d)) } : cur));
+      setApprox(false);
+      await updateTripItinerary(supabase, resolvedTripId, {
+        ...rescheduled,
+        days: rescheduled.days.map((d) => (d.day === changedDay ? fresh : d)),
+      }).catch(() => {});
+    } else {
+      setApprox(false);
+    }
+  }
 
   const placeIds = useMemo(() => {
     const ids = new Set<string>();
@@ -105,6 +161,7 @@ export default function Itinerary() {
   const sections = days.map((d) => ({
     title: startDate ? `${formatDayHeader(addDaysISO(startDate, d.day - 1))} · Day ${d.day}` : `Day ${d.day}`,
     lodging: d.lodgingPlaceId ? coords[d.lodgingPlaceId]?.name : undefined,
+    day: d.day,
     data: numberStops(d.stops),
   }));
 
@@ -126,11 +183,19 @@ export default function Itinerary() {
         <Pressable onPress={() => router.replace("/")} hitSlop={8}>
           <Text variant="label" className="text-ink-muted">‹ Home</Text>
         </Pressable>
-        <Pressable onPress={() => router.replace("/onboarding")} hitSlop={8}>
-          <Text variant="label" className="text-accent">New trip</Text>
-        </Pressable>
+        <View className="flex-row items-center gap-4">
+          <Pressable onPress={() => setEditing((e) => !e)} hitSlop={8}>
+            <Text variant="label" className="text-accent">{editing ? "Done" : "Edit"}</Text>
+          </Pressable>
+          <Pressable onPress={() => router.replace("/onboarding")} hitSlop={8}>
+            <Text variant="label" className="text-accent">New trip</Text>
+          </Pressable>
+        </View>
       </View>
       <Toggle />
+      {approx ? (
+        <Text variant="caption" className="text-center text-ink-muted mb-1">Updating times…</Text>
+      ) : null}
       {requestedDays != null && requestedDays > days.length ? (
         <Text variant="caption" className="text-center mb-2">
           Only enough local highlights for {days.length} full {days.length === 1 ? "day" : "days"} — shorter than your dates.
@@ -169,7 +234,7 @@ export default function Itinerary() {
               {section.lodging ? <Text variant="caption">Stay: {section.lodging}</Text> : null}
             </View>
           )}
-          renderItem={({ item }) => {
+          renderItem={({ item, section }) => {
             const isMeal = item.kind === "meal" || item.kind === "meal-gap";
             const mealLabel = item.mealSlot === "lunch" ? "Lunch" : item.mealSlot === "dinner" ? "Dinner" : "Meal";
             return isMeal ? (
@@ -186,7 +251,16 @@ export default function Itinerary() {
                 {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)}</Text> : null}
               </Card>
             ) : (
-              <Card className="gap-1">
+              <Card className="gap-1 relative">
+                {editing && item.num != null ? (
+                  <Pressable
+                    onPress={() => applyEdit(removeStop(working, section.day, item.num! - 1), section.day)}
+                    hitSlop={8}
+                    className="absolute right-3 top-3 z-10"
+                  >
+                    <Icon name="close" size={18} color="#6B5560" />
+                  </Pressable>
+                ) : null}
                 <View className="flex-row items-baseline gap-2">
                   {item.startTime ? (
                     <View className="px-2 py-0.5 rounded-pill bg-accent-soft">
