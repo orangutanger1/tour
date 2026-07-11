@@ -1,6 +1,6 @@
 // mobile/app/(app)/itinerary.tsx
 import { useEffect, useMemo, useState } from "react";
-import { View, SectionList, Pressable, ScrollView } from "react-native";
+import { View, SectionList, Pressable, ScrollView, Modal } from "react-native";
 import { AppleMaps } from "expo-maps";
 import Sortable from "react-native-sortables";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -11,16 +11,21 @@ import { supabase } from "../../lib/supabase";
 import { getTrip, updateTripItinerary } from "../../lib/trips";
 import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
 import { formatDayHeader, addDaysISO, inclusiveDayCount } from "../../lib/dates";
-import { Screen, Text, Button, Card, EmptyState, Loading, Icon } from "../../components/ui";
-import { removeStop, reorderStops, moveStopToDay } from "../../lib/editItinerary";
+import { Screen, Text, Button, Card, EmptyState, Loading, Icon, Input } from "../../components/ui";
+import { removeStop, reorderStops, moveStopToDay, addStop, replaceStop, isAttraction } from "../../lib/editItinerary";
 import { scheduleDayClient } from "../../lib/scheduleClient";
 import { requestDayReroute } from "../../lib/editClient";
+import { autocompletePlaces } from "../../lib/placesClient";
+import { useDebouncedValue } from "../../lib/useDebouncedValue";
 import { useAuth } from "../../lib/auth";
 import type { Itinerary, Stop } from "../../lib/types";
 
 type NumberedStop = Stop & { num: number | null };
+type PlaceResult = { text: string; placeId: string; types: string[] };
+// null attrIndex = add mode (append to end of day); number = replace mode (target attraction index)
+type SheetTarget = { day: number; attrIndex: number | null };
 
-const extra = Constants.expoConfig?.extra as { supabaseUrl: string };
+const extra = Constants.expoConfig?.extra as { supabaseUrl: string; supabaseAnonKey: string };
 
 export default function Itinerary() {
   const router = useRouter();
@@ -44,6 +49,10 @@ export default function Itinerary() {
   const [edited, setEdited] = useState<Itinerary | null>(null);
   const [editing, setEditing] = useState(false);
   const [approx, setApprox] = useState(false);
+  const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
+  const [sheetQuery, setSheetQuery] = useState("");
+  const [sheetResults, setSheetResults] = useState<PlaceResult[]>([]);
+  const debouncedSheetQuery = useDebouncedValue(sheetQuery, 300);
 
   const plainCoords = useMemo(
     () => Object.fromEntries(Object.entries(coords).map(([k, v]) => [k, { lat: v.lat, lng: v.lng }])),
@@ -89,6 +98,47 @@ export default function Itinerary() {
       ...rescheduled,
       days: rescheduled.days.map((d) => freshByDay.get(d.day) ?? d),
     }).catch(() => {});
+  }
+
+  useEffect(() => {
+    if (!sheetTarget) return;
+    let active = true;
+    autocompletePlaces({ query: debouncedSheetQuery, baseUrl: extra.supabaseUrl, anonKey: extra.supabaseAnonKey })
+      .then((r) => { if (active) setSheetResults(r); })
+      .catch(() => { if (active) setSheetResults([]); });
+    return () => { active = false; };
+  }, [debouncedSheetQuery, sheetTarget]);
+
+  function openAddSheet(day: number) {
+    setSheetQuery("");
+    setSheetResults([]);
+    setSheetTarget({ day, attrIndex: null });
+  }
+
+  function openReplaceSheet(day: number, attrIndex: number) {
+    setSheetQuery("");
+    setSheetResults([]);
+    setSheetTarget({ day, attrIndex });
+  }
+
+  function closeSheet() {
+    setSheetTarget(null);
+    setSheetQuery("");
+    setSheetResults([]);
+  }
+
+  function pickPlace(r: PlaceResult) {
+    if (!sheetTarget) return;
+    const { day, attrIndex } = sheetTarget;
+    if (attrIndex == null) {
+      const stop: Stop = { placeId: r.placeId, name: r.text, blurb: "Added by you.", kind: "attraction", dwellMinutes: 60 };
+      const attractionCount = working.days.find((d) => d.day === day)?.stops.filter(isAttraction).length ?? 0;
+      applyEdit(addStop(working, day, attractionCount, stop), day);
+    } else {
+      const stop: Stop = { placeId: r.placeId, name: r.text, blurb: "Swapped by you.", kind: "attraction", dwellMinutes: 60 };
+      applyEdit(replaceStop(working, day, attrIndex, stop), day);
+    }
+    closeSheet();
   }
 
   const placeIds = useMemo(() => {
@@ -249,13 +299,27 @@ export default function Itinerary() {
                     rowGap={12}
                     onDragEnd={({ fromIndex, toIndex }) => applyEdit(reorderStops(working, d.day, fromIndex, toIndex), d.day)}
                     renderItem={({ item }) => (
-                      <AttractionCard item={item} day={d.day} editing={editing} working={working} applyEdit={applyEdit} otherDays={otherDays} />
+                      <AttractionCard
+                        item={item}
+                        day={d.day}
+                        editing={editing}
+                        working={working}
+                        applyEdit={applyEdit}
+                        otherDays={otherDays}
+                        onReplace={openReplaceSheet}
+                      />
                     )}
                   />
                 ) : null}
                 {meals.map((item) => (
                   <MealCard key={item.placeId + (item.mealSlot ?? "") + (item.startTime ?? "")} item={item} />
                 ))}
+                <Pressable
+                  onPress={() => openAddSheet(d.day)}
+                  className="px-4 py-3 rounded-xl border border-dashed border-accent/50 items-center"
+                >
+                  <Text variant="label" className="text-accent">+ Add a place to Day {d.day}</Text>
+                </Pressable>
               </View>
             );
           })}
@@ -276,12 +340,59 @@ export default function Itinerary() {
             return isMeal ? (
               <MealCard item={item} />
             ) : (
-              <AttractionCard item={item} day={section.day} editing={editing} working={working} applyEdit={applyEdit} otherDays={[]} />
+              <AttractionCard item={item} day={section.day} editing={editing} working={working} applyEdit={applyEdit} otherDays={[]} onReplace={openReplaceSheet} />
             );
           }}
         />
       )}
+      <SearchSheet
+        visible={sheetTarget != null}
+        query={sheetQuery}
+        setQuery={setSheetQuery}
+        results={sheetResults}
+        mode={sheetTarget?.attrIndex == null ? "add" : "replace"}
+        onPick={pickPlace}
+        onClose={closeSheet}
+      />
     </Screen>
+  );
+}
+
+function SearchSheet({ visible, query, setQuery, results, mode, onPick, onClose }: {
+  visible: boolean;
+  query: string;
+  setQuery: (q: string) => void;
+  results: PlaceResult[];
+  mode: "add" | "replace";
+  onPick: (r: PlaceResult) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 bg-black/40 justify-end">
+        <View className="bg-bg rounded-t-2xl p-4 gap-3 max-h-[80%]">
+          <View className="flex-row items-center justify-between">
+            <Text variant="heading">{mode === "add" ? "Add a place" : "Replace with"}</Text>
+            <Pressable onPress={onClose} hitSlop={8}>
+              <Icon name="close" size={20} color="#6B5560" />
+            </Pressable>
+          </View>
+          <Input
+            autoFocus
+            placeholder="Search for a place…"
+            value={query}
+            onChangeText={setQuery}
+          />
+          <ScrollView contentContainerClassName="gap-1 pb-4">
+            {results.map((r) => (
+              <Pressable key={r.placeId} onPress={() => onPick(r)} className="px-3 py-3 rounded-lg active:bg-surface-2">
+                <Text variant="body">{r.text}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -303,24 +414,26 @@ function MealCard({ item }: { item: NumberedStop }) {
   );
 }
 
-function AttractionCard({ item, day, editing, working, applyEdit, otherDays }: {
+function AttractionCard({ item, day, editing, working, applyEdit, otherDays, onReplace }: {
   item: NumberedStop;
   day: number;
   editing: boolean;
   working: Itinerary;
   applyEdit: (next: Itinerary, changedDays: number | number[]) => void;
   otherDays: number[];
+  onReplace: (day: number, attrIndex: number) => void;
 }) {
   return (
     <Card className="gap-1 relative">
       {editing && item.num != null ? (
-        <Pressable
-          onPress={() => applyEdit(removeStop(working, day, item.num! - 1), day)}
-          hitSlop={8}
-          className="absolute right-3 top-3 z-10"
-        >
-          <Icon name="close" size={18} color="#6B5560" />
-        </Pressable>
+        <View className="absolute right-3 top-3 z-10 flex-row items-center gap-3">
+          <Pressable onPress={() => onReplace(day, item.num! - 1)} hitSlop={8}>
+            <Icon name="refresh" size={18} color="#6B5560" />
+          </Pressable>
+          <Pressable onPress={() => applyEdit(removeStop(working, day, item.num! - 1), day)} hitSlop={8}>
+            <Icon name="close" size={18} color="#6B5560" />
+          </Pressable>
+        </View>
       ) : null}
       <View className="flex-row items-baseline gap-2">
         {item.startTime ? (
