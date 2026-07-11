@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, SectionList, Pressable, ScrollView } from "react-native";
 import { AppleMaps } from "expo-maps";
+import Sortable from "react-native-sortables";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
@@ -11,11 +12,13 @@ import { getTrip, updateTripItinerary } from "../../lib/trips";
 import { getStopCoords, decodePolyline, formatDwell, numberStops, type StopCoord } from "../../lib/poi";
 import { formatDayHeader, addDaysISO, inclusiveDayCount } from "../../lib/dates";
 import { Screen, Text, Button, Card, EmptyState, Loading, Icon } from "../../components/ui";
-import { removeStop } from "../../lib/editItinerary";
+import { removeStop, reorderStops, moveStopToDay } from "../../lib/editItinerary";
 import { scheduleDayClient } from "../../lib/scheduleClient";
 import { requestDayReroute } from "../../lib/editClient";
 import { useAuth } from "../../lib/auth";
-import type { Itinerary } from "../../lib/types";
+import type { Itinerary, Stop } from "../../lib/types";
+
+type NumberedStop = Stop & { num: number | null };
 
 const extra = Constants.expoConfig?.extra as { supabaseUrl: string };
 
@@ -51,10 +54,12 @@ export default function Itinerary() {
   const days = working.days;
   const empty = days.length === 0 || days.every((d) => d.stops.length === 0);
 
-  async function applyEdit(next: Itinerary, changedDay: number) {
+  async function applyEdit(next: Itinerary, changedDays: number | number[]) {
+    const dayList = Array.isArray(changedDays) ? changedDays : [changedDays];
+    const daySet = new Set(dayList);
     const rescheduled: Itinerary = {
       ...next,
-      days: next.days.map((d) => (d.day === changedDay ? scheduleDayClient(d, plainCoords) : d)),
+      days: next.days.map((d) => (daySet.has(d.day) ? scheduleDayClient(d, plainCoords) : d)),
     };
     const previous = edited;
     setEdited(rescheduled); // optimistic
@@ -70,22 +75,20 @@ export default function Itinerary() {
     }
     const token = session?.access_token;
     if (!token) return;
-    const fresh = await requestDayReroute({
-      tripId: resolvedTripId,
-      day: changedDay,
-      accessToken: token,
-      baseUrl: extra.supabaseUrl,
-    });
-    if (fresh) {
-      setEdited((cur) => (cur ? { ...cur, days: cur.days.map((d) => (d.day === changedDay ? fresh : d)) } : cur));
-      setApprox(false);
-      await updateTripItinerary(supabase, resolvedTripId, {
-        ...rescheduled,
-        days: rescheduled.days.map((d) => (d.day === changedDay ? fresh : d)),
-      }).catch(() => {});
-    } else {
-      setApprox(false);
-    }
+    const freshResults = await Promise.all(
+      dayList.map((day) =>
+        requestDayReroute({ tripId: resolvedTripId, day, accessToken: token, baseUrl: extra.supabaseUrl }).then(
+          (fresh) => [day, fresh] as const,
+        ),
+      ),
+    );
+    const freshByDay = new Map(freshResults);
+    setEdited((cur) => (cur ? { ...cur, days: cur.days.map((d) => freshByDay.get(d.day) ?? d) } : cur));
+    setApprox(false);
+    await updateTripItinerary(supabase, resolvedTripId, {
+      ...rescheduled,
+      days: rescheduled.days.map((d) => freshByDay.get(d.day) ?? d),
+    }).catch(() => {});
   }
 
   const placeIds = useMemo(() => {
@@ -223,6 +226,40 @@ export default function Itinerary() {
             />
           </View>
         </View>
+      ) : editing ? (
+        <ScrollView contentContainerClassName="gap-3 pb-4">
+          {days.map((d) => {
+            const numbered = numberStops(d.stops);
+            const attractions = numbered.filter((s) => s.kind !== "meal" && s.kind !== "meal-gap");
+            const meals = numbered.filter((s) => s.kind === "meal" || s.kind === "meal-gap");
+            const title = startDate ? `${formatDayHeader(addDaysISO(startDate, d.day - 1))} · Day ${d.day}` : `Day ${d.day}`;
+            const lodging = d.lodgingPlaceId ? coords[d.lodgingPlaceId]?.name : undefined;
+            const otherDays = days.filter((other) => other.day !== d.day).map((other) => other.day);
+            return (
+              <View key={d.day} className="gap-3">
+                <View className="bg-bg pt-2 pb-2">
+                  <Text variant="heading">{title}</Text>
+                  {lodging ? <Text variant="caption">Stay: {lodging}</Text> : null}
+                </View>
+                {attractions.length > 0 ? (
+                  <Sortable.Grid
+                    columns={1}
+                    data={attractions}
+                    keyExtractor={(item) => item.placeId + item.num}
+                    rowGap={12}
+                    onDragEnd={({ fromIndex, toIndex }) => applyEdit(reorderStops(working, d.day, fromIndex, toIndex), d.day)}
+                    renderItem={({ item }) => (
+                      <AttractionCard item={item} day={d.day} editing={editing} working={working} applyEdit={applyEdit} otherDays={otherDays} />
+                    )}
+                  />
+                ) : null}
+                {meals.map((item) => (
+                  <MealCard key={item.placeId + (item.mealSlot ?? "") + (item.startTime ?? "")} item={item} />
+                ))}
+              </View>
+            );
+          })}
+        </ScrollView>
       ) : (
         <SectionList
           sections={sections}
@@ -236,49 +273,81 @@ export default function Itinerary() {
           )}
           renderItem={({ item, section }) => {
             const isMeal = item.kind === "meal" || item.kind === "meal-gap";
-            const mealLabel = item.mealSlot === "lunch" ? "Lunch" : item.mealSlot === "dinner" ? "Dinner" : "Meal";
             return isMeal ? (
-              <Card className={`gap-1 ${item.kind === "meal-gap" ? "border-dashed" : ""}`}>
-                <View className="flex-row items-baseline gap-2">
-                  {item.startTime ? (
-                    <View className="px-2 py-0.5 rounded-pill bg-accent-soft">
-                      <Text variant="label" className="text-accent text-[12px]">{item.startTime}</Text>
-                    </View>
-                  ) : null}
-                  <Text variant="heading">{mealLabel}{item.placeId ? ` · ${item.name}` : ""}</Text>
-                </View>
-                <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
-                {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)}</Text> : null}
-              </Card>
+              <MealCard item={item} />
             ) : (
-              <Card className="gap-1 relative">
-                {editing && item.num != null ? (
-                  <Pressable
-                    onPress={() => applyEdit(removeStop(working, section.day, item.num! - 1), section.day)}
-                    hitSlop={8}
-                    className="absolute right-3 top-3 z-10"
-                  >
-                    <Icon name="close" size={18} color="#6B5560" />
-                  </Pressable>
-                ) : null}
-                <View className="flex-row items-baseline gap-2">
-                  {item.startTime ? (
-                    <View className="px-2 py-0.5 rounded-pill bg-accent-soft">
-                      <Text variant="label" className="text-accent text-[12px]">{item.startTime}</Text>
-                    </View>
-                  ) : null}
-                  <Text variant="heading">{item.num}. {item.name}</Text>
-                </View>
-                <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
-                <View className="flex-row gap-3">
-                  {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)} here</Text> : null}
-                  {item.travelMinutesFromPrev != null ? <Text variant="caption">{item.travelMinutesFromPrev} min from previous</Text> : null}
-                </View>
-              </Card>
+              <AttractionCard item={item} day={section.day} editing={editing} working={working} applyEdit={applyEdit} otherDays={[]} />
             );
           }}
         />
       )}
     </Screen>
+  );
+}
+
+function MealCard({ item }: { item: NumberedStop }) {
+  const mealLabel = item.mealSlot === "lunch" ? "Lunch" : item.mealSlot === "dinner" ? "Dinner" : "Meal";
+  return (
+    <Card className={`gap-1 ${item.kind === "meal-gap" ? "border-dashed" : ""}`}>
+      <View className="flex-row items-baseline gap-2">
+        {item.startTime ? (
+          <View className="px-2 py-0.5 rounded-pill bg-accent-soft">
+            <Text variant="label" className="text-accent text-[12px]">{item.startTime}</Text>
+          </View>
+        ) : null}
+        <Text variant="heading">{mealLabel}{item.placeId ? ` · ${item.name}` : ""}</Text>
+      </View>
+      <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
+      {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)}</Text> : null}
+    </Card>
+  );
+}
+
+function AttractionCard({ item, day, editing, working, applyEdit, otherDays }: {
+  item: NumberedStop;
+  day: number;
+  editing: boolean;
+  working: Itinerary;
+  applyEdit: (next: Itinerary, changedDays: number | number[]) => void;
+  otherDays: number[];
+}) {
+  return (
+    <Card className="gap-1 relative">
+      {editing && item.num != null ? (
+        <Pressable
+          onPress={() => applyEdit(removeStop(working, day, item.num! - 1), day)}
+          hitSlop={8}
+          className="absolute right-3 top-3 z-10"
+        >
+          <Icon name="close" size={18} color="#6B5560" />
+        </Pressable>
+      ) : null}
+      <View className="flex-row items-baseline gap-2">
+        {item.startTime ? (
+          <View className="px-2 py-0.5 rounded-pill bg-accent-soft">
+            <Text variant="label" className="text-accent text-[12px]">{item.startTime}</Text>
+          </View>
+        ) : null}
+        <Text variant="heading">{item.num}. {item.name}</Text>
+      </View>
+      <Text variant="body" className="text-ink-muted">{item.blurb}</Text>
+      <View className="flex-row gap-3">
+        {formatDwell(item.dwellMinutes) ? <Text variant="caption">{formatDwell(item.dwellMinutes)} here</Text> : null}
+        {item.travelMinutesFromPrev != null ? <Text variant="caption">{item.travelMinutesFromPrev} min from previous</Text> : null}
+      </View>
+      {editing && item.num != null && otherDays.length > 0 ? (
+        <View className="flex-row gap-2 flex-wrap mt-1">
+          {otherDays.map((dayNum) => (
+            <Pressable
+              key={dayNum}
+              onPress={() => applyEdit(moveStopToDay(working, day, item.num! - 1, dayNum), [day, dayNum])}
+              className="px-2 py-1 rounded-pill bg-surface-2"
+            >
+              <Text variant="label" className="text-ink-muted text-[12px]">→ Day {dayNum}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+    </Card>
   );
 }
